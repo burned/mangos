@@ -149,8 +149,8 @@ void Map::LoadMap(int gx,int gy)
     snprintf(tmp, len, (char *)(sWorld.GetDataPath()+"maps/%03u%02u%02u.map").c_str(),i_id,gx,gy);
     sLog.outDetail("Loading map %s",tmp);
     // loading data
-    GridMaps[x][y] = new GridMap();
-    if (!GridMaps[x][y]->loadData(tmp))
+    GridMaps[gx][gy] = new GridMap();
+    if (!GridMaps[gx][gy]->loadData(tmp))
     {
         sLog.outError("Error load map file: \n %s\n", tmp);
     }
@@ -1676,6 +1676,16 @@ float Map::GetWaterLevel(float x, float y ) const
 {
     if(GridMap* gmap = const_cast<Map*>(this)->GetGrid(x, y))
         return gmap->getLiquidLevel(x, y);
+    else
+        return 0;
+}
+
+uint32 Map::GetAreaIdByAreaFlag(uint16 areaflag,uint32 map_id)
+{
+    AreaTableEntry const *entry = GetAreaEntryByAreaFlagAndMap(areaflag,map_id);
+
+    if (entry)
+        return entry->ID;
     else
         return 0;
 }
