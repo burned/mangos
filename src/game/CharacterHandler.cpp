@@ -63,14 +63,14 @@ bool LoginQueryHolder::Initialize()
     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADGROUP,           "SELECT leaderGuid FROM group_member WHERE memberGuid ='%u'", GUID_LOPART(m_guid));
     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADBOUNDINSTANCES,  "SELECT id, permanent, map, difficulty, resettime FROM character_instance LEFT JOIN instance ON instance = id WHERE guid = '%u'", GUID_LOPART(m_guid));
     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADAURAS,           "SELECT caster_guid,spell,effect_index,stackcount,amount,maxduration,remaintime,remaincharges FROM character_aura WHERE guid = '%u'", GUID_LOPART(m_guid));
-    res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADSPELLS,          "SELECT spell,slot,active,disabled FROM character_spell WHERE guid = '%u'", GUID_LOPART(m_guid));
+    res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADSPELLS,          "SELECT spell,active,disabled FROM character_spell WHERE guid = '%u'", GUID_LOPART(m_guid));
     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADQUESTSTATUS,     "SELECT quest,status,rewarded,explored,timer,mobcount1,mobcount2,mobcount3,mobcount4,itemcount1,itemcount2,itemcount3,itemcount4 FROM character_queststatus WHERE guid = '%u'", GUID_LOPART(m_guid));
     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADDAILYQUESTSTATUS,"SELECT quest,time FROM character_queststatus_daily WHERE guid = '%u'", GUID_LOPART(m_guid));
     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADTUTORIALS,       "SELECT tut0,tut1,tut2,tut3,tut4,tut5,tut6,tut7 FROM character_tutorial WHERE account = '%u' AND realmid = '%u'", GetAccountId(), realmID);
     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADREPUTATION,      "SELECT faction,standing,flags FROM character_reputation WHERE guid = '%u'", GUID_LOPART(m_guid));
     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADINVENTORY,       "SELECT data,bag,slot,item,item_template FROM character_inventory JOIN item_instance ON character_inventory.item = item_instance.guid WHERE character_inventory.guid = '%u' ORDER BY bag,slot", GUID_LOPART(m_guid));
-    res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADACTIONS,         "SELECT button,action,type,misc FROM character_action WHERE guid = '%u' ORDER BY button", GUID_LOPART(m_guid));
-    res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADMAILCOUNT,       "SELECT COUNT(id) FROM mail WHERE receiver = '%u' AND (checked & 1)=0 AND deliver_time <= '" I64FMTD "'", GUID_LOPART(m_guid),(uint64)time(NULL));
+    res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADACTIONS,         "SELECT button,action,type FROM character_action WHERE guid = '%u' ORDER BY button", GUID_LOPART(m_guid));
+    res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADMAILCOUNT,       "SELECT COUNT(id) FROM mail WHERE receiver = '%u' AND (checked & 1)=0 AND deliver_time <= '" UI64FMTD "'", GUID_LOPART(m_guid),(uint64)time(NULL));
     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADMAILDATE,        "SELECT MIN(deliver_time) FROM mail WHERE receiver = '%u' AND (checked & 1)=0", GUID_LOPART(m_guid));
     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADSOCIALLIST,      "SELECT friend,flags,note FROM character_social WHERE guid = '%u' LIMIT 255", GUID_LOPART(m_guid));
     res &= SetPQuery(PLAYER_LOGIN_QUERY_LOADHOMEBIND,        "SELECT map,zone,position_x,position_y,position_z FROM character_homebind WHERE guid = '%u'", GUID_LOPART(m_guid));
@@ -157,8 +157,8 @@ void WorldSession::HandleCharEnumOpcode( WorldPacket & /*recv_data*/ )
     //   ------- Query Without Declined Names --------
     //          0                1                2                3                      4                      5               6                     7                     8
         "SELECT characters.guid, characters.data, characters.name, characters.position_x, characters.position_y, characters.position_z, characters.map, characters.totaltime, characters.leveltime, "
-    //   9                    10                   11                     12                   13
-        "characters.at_login, character_pet.entry, character_pet.modelid, character_pet.level, guild_member.guildid "
+    //   9                     10                   11                     12                   13               14
+        "characters.at_login, characters.zone, character_pet.entry, character_pet.modelid, character_pet.level, guild_member.guildid "
         "FROM characters LEFT JOIN character_pet ON characters.guid=character_pet.owner AND character_pet.slot='%u' "
         "LEFT JOIN guild_member ON characters.guid = guild_member.guid "
         "WHERE characters.account = '%u' ORDER BY characters.guid"
@@ -166,8 +166,8 @@ void WorldSession::HandleCharEnumOpcode( WorldPacket & /*recv_data*/ )
     //   --------- Query With Declined Names ---------
     //          0                1                2                3                      4                      5               6                     7                     8
         "SELECT characters.guid, characters.data, characters.name, characters.position_x, characters.position_y, characters.position_z, characters.map, characters.totaltime, characters.leveltime, "
-    //   9                    10                   11                     12                   13                    14
-        "characters.at_login, character_pet.entry, character_pet.modelid, character_pet.level, guild_member.guildid, genitive "
+    //   9                    10                   11                     12                   13                    14                 15
+        "characters.at_login, characters.zone, character_pet.entry, character_pet.modelid, character_pet.level, guild_member.guildid, character_declinedname.genitive "
         "FROM characters LEFT JOIN character_pet ON characters.guid = character_pet.owner AND character_pet.slot='%u' "
         "LEFT JOIN character_declinedname ON characters.guid = character_declinedname.guid "
         "LEFT JOIN guild_member ON characters.guid = guild_member.guid "
@@ -245,30 +245,31 @@ void WorldSession::HandleCharCreateOpcode( WorldPacket & recv_data )
     }
 
     // prevent character creating with invalid name
-    if(!normalizePlayerName(name))
+    if (!normalizePlayerName(name))
     {
-        data << (uint8)CHAR_NAME_INVALID_CHARACTER;
+        data << (uint8)CHAR_NAME_NO_NAME;
         SendPacket( &data );
         sLog.outError("Account:[%d] but tried to Create character with empty [name] ",GetAccountId());
         return;
     }
 
     // check name limitations
-    if(!ObjectMgr::IsValidName(name,true))
+    uint8 res = ObjectMgr::CheckPlayerName(name,true);
+    if (res != CHAR_NAME_SUCCESS)
     {
-        data << (uint8)CHAR_NAME_INVALID_CHARACTER;
+        data << uint8(res);
         SendPacket( &data );
         return;
     }
 
-    if(GetSecurity() == SEC_PLAYER && objmgr.IsReservedName(name))
+    if (GetSecurity() == SEC_PLAYER && objmgr.IsReservedName(name))
     {
         data << (uint8)CHAR_NAME_RESERVED;
         SendPacket( &data );
         return;
     }
 
-    if(objmgr.GetPlayerGUIDByName(name))
+    if (objmgr.GetPlayerGUIDByName(name))
     {
         data << (uint8)CHAR_CREATE_NAME_IN_USE;
         SendPacket( &data );
@@ -276,7 +277,7 @@ void WorldSession::HandleCharCreateOpcode( WorldPacket & recv_data )
     }
 
     QueryResult *resultacct = loginDatabase.PQuery("SELECT SUM(numchars) FROM realmcharacters WHERE acctid = '%d'", GetAccountId());
-    if ( resultacct )
+    if (resultacct)
     {
         Field *fields=resultacct->Fetch();
         uint32 acctcharcount = fields[0].GetUInt32();
@@ -508,7 +509,7 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder * holder)
     SendPacket(&data);
 
     data.Initialize( SMSG_ACCOUNT_DATA_TIMES, 128 );
-    for(int i = 0; i < 32; i++)
+    for(int i = 0; i < 32; ++i)
         data << uint32(0);
     SendPacket(&data);
 
@@ -655,10 +656,9 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder * holder)
 
     if(uint32 sourceNode = pCurrChar->m_taxi.GetTaxiSource())
     {
-
         sLog.outDebug( "WORLD: Restart character %u taxi flight", pCurrChar->GetGUIDLow() );
 
-        uint32 MountId = objmgr.GetTaxiMount(sourceNode, pCurrChar->GetTeam());
+        uint32 mountDisplayId = objmgr.GetTaxiMountDisplayId(sourceNode, pCurrChar->GetTeam(),true);
         uint32 path = pCurrChar->m_taxi.GetCurrentTaxiPath();
 
         // search appropriate start path node
@@ -700,7 +700,7 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder * holder)
             }
         }
 
-        SendDoFlight( MountId, path, startNode );
+        SendDoFlight( mountDisplayId, path, startNode );
     }
 
     // Load pet if any (if player not alive and in taxi flight or another then pet will remember as temporary unsummoned)
@@ -820,17 +820,17 @@ void WorldSession::HandleTutorialFlag( WorldPacket & recv_data )
 
 void WorldSession::HandleTutorialClear( WorldPacket & /*recv_data*/ )
 {
-    for ( uint32 iI = 0; iI < 8; iI++)
-        GetPlayer()->SetTutorialInt( iI, 0xFFFFFFFF );
+    for (int i = 0; i < 8; ++i)
+        GetPlayer()->SetTutorialInt( i, 0xFFFFFFFF );
 }
 
 void WorldSession::HandleTutorialReset( WorldPacket & /*recv_data*/ )
 {
-    for ( uint32 iI = 0; iI < 8; iI++)
-        GetPlayer()->SetTutorialInt( iI, 0x00000000 );
+    for (int i = 0; i < 8; ++i)
+        GetPlayer()->SetTutorialInt( i, 0x00000000 );
 }
 
-void WorldSession::HandleSetWatchedFactionIndexOpcode(WorldPacket & recv_data)
+void WorldSession::HandleSetWatchedFactionOpcode(WorldPacket & recv_data)
 {
     CHECK_PACKET_SIZE(recv_data,4);
 
@@ -840,7 +840,7 @@ void WorldSession::HandleSetWatchedFactionIndexOpcode(WorldPacket & recv_data)
     GetPlayer()->SetUInt32Value(PLAYER_FIELD_WATCHED_FACTION_INDEX, fact);
 }
 
-void WorldSession::HandleSetWatchedFactionInactiveOpcode(WorldPacket & recv_data)
+void WorldSession::HandleSetFactionInactiveOpcode(WorldPacket & recv_data)
 {
     CHECK_PACKET_SIZE(recv_data,4+1);
 
@@ -852,19 +852,19 @@ void WorldSession::HandleSetWatchedFactionInactiveOpcode(WorldPacket & recv_data
     _player->GetReputationMgr().SetInactive(replistid, inactive);
 }
 
-void WorldSession::HandleToggleHelmOpcode( WorldPacket & /*recv_data*/ )
+void WorldSession::HandleShowingHelmOpcode( WorldPacket & /*recv_data*/ )
 {
-    DEBUG_LOG("CMSG_TOGGLE_HELM for %s", _player->GetName());
+    DEBUG_LOG("CMSG_SHOWING_HELM for %s", _player->GetName());
     _player->ToggleFlag(PLAYER_FLAGS, PLAYER_FLAGS_HIDE_HELM);
 }
 
-void WorldSession::HandleToggleCloakOpcode( WorldPacket & /*recv_data*/ )
+void WorldSession::HandleShowingCloakOpcode( WorldPacket & /*recv_data*/ )
 {
-    DEBUG_LOG("CMSG_TOGGLE_CLOAK for %s", _player->GetName());
+    DEBUG_LOG("CMSG_SHOWING_CLOAK for %s", _player->GetName());
     _player->ToggleFlag(PLAYER_FLAGS, PLAYER_FLAGS_HIDE_CLOAK);
 }
 
-void WorldSession::HandleChangePlayerNameOpcode(WorldPacket& recv_data)
+void WorldSession::HandleCharRenameOpcode(WorldPacket& recv_data)
 {
     CHECK_PACKET_SIZE(recv_data, 8+1);
 
@@ -875,7 +875,7 @@ void WorldSession::HandleChangePlayerNameOpcode(WorldPacket& recv_data)
     recv_data >> newname;
 
     // prevent character rename to invalid name
-    if(!normalizePlayerName(newname))
+    if (!normalizePlayerName(newname))
     {
         WorldPacket data(SMSG_CHAR_RENAME, 1);
         data << uint8(CHAR_NAME_NO_NAME);
@@ -883,16 +883,17 @@ void WorldSession::HandleChangePlayerNameOpcode(WorldPacket& recv_data)
         return;
     }
 
-    if(!ObjectMgr::IsValidName(newname, true))
+    uint8 res = ObjectMgr::CheckPlayerName(newname,true);
+    if (res != CHAR_NAME_SUCCESS)
     {
         WorldPacket data(SMSG_CHAR_RENAME, 1);
-        data << uint8(CHAR_NAME_INVALID_CHARACTER);
+        data << uint8(res);
         SendPacket( &data );
         return;
     }
 
     // check name limitations
-    if(GetSecurity() == SEC_PLAYER && objmgr.IsReservedName(newname))
+    if (GetSecurity() == SEC_PLAYER && objmgr.IsReservedName(newname))
     {
         WorldPacket data(SMSG_CHAR_RENAME, 1);
         data << uint8(CHAR_NAME_RESERVED);
@@ -947,7 +948,7 @@ void WorldSession::HandleChangePlayerNameOpcodeCallBack(QueryResult *result, uin
     session->SendPacket(&data);
 }
 
-void WorldSession::HandleDeclinedPlayerNameOpcode(WorldPacket& recv_data)
+void WorldSession::HandleSetPlayerDeclinedNames(WorldPacket& recv_data)
 {
     uint64 guid;
 

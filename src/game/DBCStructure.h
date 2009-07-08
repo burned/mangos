@@ -212,10 +212,21 @@ struct CreatureFamilyEntry
                                                             // 25 icon, unused
 };
 
+#define MAX_CREATURE_SPELL_DATA_SLOT 4
+
 struct CreatureSpellDataEntry
 {
-    uint32    ID;                                           // 0
-    //uint32    spellId[4];                                 // 1-4 hunter pet learned spell (for later use)
+    uint32    ID;                                           // 0        m_ID
+    uint32    spellId[MAX_CREATURE_SPELL_DATA_SLOT];        // 1-4      m_spells[4]
+    //uint32    availability[MAX_CREATURE_SPELL_DATA_SLOT]; // 4-7      m_availability[4]
+};
+
+struct CreatureTypeEntry
+{
+    uint32    ID;                                           // 0        m_ID
+    //char*   Name[16];                                     // 1-16     name
+                                                            // 17       string flags
+    //uint32    no_expirience;                              // 18 no exp? critters, non-combat pets, gas cloud.
 };
 
 struct DurabilityCostsEntry
@@ -228,6 +239,17 @@ struct DurabilityQualityEntry
 {
     uint32    Id;                                           // 0
     float     quality_mod;                                  // 1
+};
+
+struct EmotesEntry
+{
+    uint32  Id;                                             // 0
+    //char*   Name;                                         // 1, internal name
+    //uint32  AnimationId;                                  // 2, ref to animationData
+    uint32  Flags;                                          // 3, bitmask, may be unit_flags
+    uint32  EmoteType;                                      // 4, Can be 0, 1 or 2 (determine how emote are shown)
+    uint32  UnitStandState;                                 // 5, uncomfirmed, may be enum UnitStandStateType
+    //uint32  SoundId;                                      // 6, ref to soundEntries
 };
 
 struct EmotesTextEntry
@@ -299,6 +321,14 @@ struct FactionTemplateEntry
         return hostileMask == 0 && friendlyMask == 0;
     }
     bool IsContestedGuardFaction() const { return (factionFlags & FACTION_TEMPLATE_FLAG_CONTESTED_GUARD)!=0; }
+};
+
+struct GameObjectDisplayInfoEntry
+{
+    uint32      Displayid;                                  // 0        m_ID
+    // char* filename;                                      // 1
+    // uint32 unknown2[10];                                 // 2-11     unknown data
+    // float  unknown12[6];                                 // 12-17    unknown data
 };
 
 struct GemPropertiesEntry
@@ -549,7 +579,7 @@ struct RandomPropertiesPointsEntry
 struct SkillLineEntry
 {
     uint32    id;                                           // 0
-    uint32    categoryId;                                   // 1 (index from SkillLineCategory.dbc)
+    int32     categoryId;                                   // 1 (index from SkillLineCategory.dbc)
     //uint32    skillCostID;                                // 2 not used
     char*     name[16];                                     // 3-18
                                                             // 19 string flags, not used
@@ -798,6 +828,18 @@ struct StableSlotPricesEntry
     uint32 Price;
 };
 
+/* unused currently
+struct SummonPropertiesEntry
+{
+    uint32  Id;                                             // 0
+    uint32  Group;                                          // 1, enum SummonPropGroup,  0 - can't be controlled?, 1 - something guardian?, 2 - pet?, 3 - something controllable?, 4 - taxi/mount?
+    uint32  FactionId;                                      // 2,                        14 rows > 0
+    uint32  Type;                                           // 3, enum SummonPropType
+    uint32  Slot;                                           // 4,                        0-6
+    uint32  Flags;                                          // 5, enum SummonPropFlags
+};
+*/
+
 struct TalentEntry
 {
     uint32    TalentID;                                     // 0
@@ -827,15 +869,14 @@ struct TalentTabEntry
 
 struct TaxiNodesEntry
 {
-    uint32    ID;                                           // 0
-    uint32    map_id;                                       // 1
-    float     x;                                            // 2
-    float     y;                                            // 3
-    float     z;                                            // 4
-    //char*     name[16];                                   // 5-21
-                                                            // 22 string flags, unused
-    uint32    horde_mount_type;                             // 23
-    uint32    alliance_mount_type;                          // 24
+    uint32    ID;                                           // 0        m_ID
+    uint32    map_id;                                       // 1        m_ContinentID
+    float     x;                                            // 2        m_x
+    float     y;                                            // 3        m_y
+    float     z;                                            // 4        m_z
+    char*     name[16];                                     // 5-21     m_Name_lang
+                                                            // 22 string flags
+    uint32    MountCreatureID[2];                           // 23-24    m_MountCreatureID[2]
 };
 
 struct TaxiPathEntry
@@ -879,6 +920,20 @@ struct WorldMapAreaEntry
     float     x2;                                           // 7
     int32   virtual_map_id;                                 // 8 -1 (map_id have correct map) other: virtual map where zone show (map_id - where zone in fact internally)
 };
+
+/* not used in 2.4.3 code
+#define MAX_WORLD_MAP_OVERLAY_AREA_IDX 4
+
+struct WorldMapOverlayEntry
+{
+    uint32    ID;                                           // 0
+    //uint32    worldMapAreaId;                             // 1 idx in WorldMapArea.dbc
+    uint32    areatableID[MAX_WORLD_MAP_OVERLAY_AREA_IDX];  // 2-5
+                                                            // 6-7 always 0, possible part of areatableID[]
+    //char* internal_name                                   // 8
+                                                            // 9-16 some ints
+};
+*/
 
 struct WorldSafeLocsEntry
 {

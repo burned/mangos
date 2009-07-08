@@ -107,6 +107,9 @@ enum WorldConfigs
     CONFIG_STRICT_PLAYER_NAMES,
     CONFIG_STRICT_CHARTER_NAMES,
     CONFIG_STRICT_PET_NAMES,
+    CONFIG_MIN_PLAYER_NAME,
+    CONFIG_MIN_CHARTER_NAME,
+    CONFIG_MIN_PET_NAME,
     CONFIG_CHARACTERS_CREATING_DISABLED,
     CONFIG_CHARACTERS_PER_ACCOUNT,
     CONFIG_CHARACTERS_PER_REALM,
@@ -161,8 +164,10 @@ enum WorldConfigs
     CONFIG_CHATFLOOD_MESSAGE_DELAY,
     CONFIG_CHATFLOOD_MUTE_TIME,
     CONFIG_EVENT_ANNOUNCE,
+    CONFIG_CREATURE_FAMILY_FLEE_ASSISTANCE_RADIUS,
     CONFIG_CREATURE_FAMILY_ASSISTANCE_RADIUS,
     CONFIG_CREATURE_FAMILY_ASSISTANCE_DELAY,
+    CONFIG_CREATURE_FAMILY_FLEE_DELAY,
     CONFIG_WORLD_BOSS_LEVEL_DIFF,
     CONFIG_QUEST_LOW_LEVEL_HIDE_DIFF,
     CONFIG_QUEST_HIGH_LEVEL_HIDE_DIFF,
@@ -392,11 +397,11 @@ class World
         void SetAllowMovement(bool allow) { m_allowMovement = allow; }
 
         /// Set a new Message of the Day
-        void SetMotd(std::string motd) { m_motd = motd; }
+        void SetMotd(const std::string& motd) { m_motd = motd; }
         /// Get the current Message of the Day
         const char* GetMotd() const { return m_motd.c_str(); }
 
-        uint32 GetDefaultDbcLocale() const { return m_defaultDbcLocale; }
+        LocaleConstant GetDefaultDbcLocale() const { return m_defaultDbcLocale; }
 
         /// Get the path where data (dbc, maps) are stored on disk
         std::string GetDataPath() const { return m_dataPath; }
@@ -462,7 +467,6 @@ class World
         bool IsPvPRealm() { return (getConfig(CONFIG_GAME_TYPE) == REALM_TYPE_PVP || getConfig(CONFIG_GAME_TYPE) == REALM_TYPE_RPPVP || getConfig(CONFIG_GAME_TYPE) == REALM_TYPE_FFA_PVP); }
         bool IsFFAPvPRealm() { return getConfig(CONFIG_GAME_TYPE) == REALM_TYPE_FFA_PVP; }
 
-        bool KickPlayer(const std::string& playerName);
         void KickAll();
         void KickAllLess(AccountTypes sec);
         BanReturn BanAccount(BanMode mode, std::string nameOrIP, std::string duration, std::string reason, std::string author);
@@ -547,7 +551,7 @@ class World
         static float m_VisibleObjectGreyDistance;
 
         // CLI command holder to be thread safe
-        ZThread::LockedQueue<CliCommandHolder*, ZThread::FastMutex> cliCmdQueue;
+		ACE_Based::LockedQueue<CliCommandHolder*,ACE_Thread_Mutex> cliCmdQueue;
         SqlResultQueue *m_resultQueue;
 
         // next daily quests reset time
@@ -558,7 +562,7 @@ class World
 
         //sessions that are added async
         void AddSession_(WorldSession* s);
-        ZThread::LockedQueue<WorldSession*, ZThread::FastMutex> addSessQueue;
+		ACE_Based::LockedQueue<WorldSession*, ACE_Thread_Mutex> addSessQueue;
 
         //used versions
         std::string m_DBVersion;

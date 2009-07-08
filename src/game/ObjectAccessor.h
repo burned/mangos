@@ -21,7 +21,7 @@
 
 #include "Platform/Define.h"
 #include "Policies/Singleton.h"
-#include "zthread/FastMutex.h"
+#include <ace/Thread_Mutex.h>
 #include "Utilities/UnorderedMap.h"
 #include "Policies/ThreadingModel.h"
 
@@ -48,7 +48,7 @@ class HashMapHolder
     public:
 
         typedef UNORDERED_MAP< uint64, T* >   MapType;
-        typedef ZThread::FastMutex LockType;
+        typedef ACE_Thread_Mutex LockType;
         typedef MaNGOS::GeneralLock<LockType > Guard;
 
         static void Insert(T* o) { m_objectMap[o->GetGUID()] = o; }
@@ -77,7 +77,7 @@ class HashMapHolder
         static MapType  m_objectMap;
 };
 
-class MANGOS_DLL_DECL ObjectAccessor : public MaNGOS::Singleton<ObjectAccessor, MaNGOS::ClassLevelLockable<ObjectAccessor, ZThread::FastMutex> >
+class MANGOS_DLL_DECL ObjectAccessor : public MaNGOS::Singleton<ObjectAccessor, MaNGOS::ClassLevelLockable<ObjectAccessor, ACE_Thread_Mutex> >
 {
 
     friend class MaNGOS::OperatorNew<ObjectAccessor>;
@@ -124,7 +124,7 @@ class MANGOS_DLL_DECL ObjectAccessor : public MaNGOS::Singleton<ObjectAccessor, 
             CellPair q = MaNGOS::ComputeCellPair(obj->GetPositionX(),obj->GetPositionY());
             if(q.x_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP || q.y_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP )
             {
-                sLog.outError("ObjectAccessor::GetObjecInWorld: object "I64FMTD" has invalid coordinates X:%f Y:%f grid cell [%u:%u]", obj->GetGUID(), obj->GetPositionX(), obj->GetPositionY(), q.x_coord, q.y_coord);
+                sLog.outError("ObjectAccessor::GetObjecInWorld: object (GUID: %u TypeId: %u) has invalid coordinates X:%f Y:%f grid cell [%u:%u]", obj->GetGUIDLow(), obj->GetTypeId(), obj->GetPositionX(), obj->GetPositionY(), q.x_coord, q.y_coord);
                 return NULL;
             }
 
@@ -136,14 +136,10 @@ class MANGOS_DLL_DECL ObjectAccessor : public MaNGOS::Singleton<ObjectAccessor, 
         }
 
         static Object*   GetObjectByTypeMask(WorldObject const &, uint64, uint32 typemask);
-        static Creature* GetNPCIfCanInteractWith(Player const &player, uint64 guid, uint32 npcflagmask);
-        static Creature* GetCreature(WorldObject const &, uint64);
         static Creature* GetCreatureOrPet(WorldObject const &, uint64);
         static Unit* GetUnit(WorldObject const &, uint64);
         static Pet* GetPet(Unit const &, uint64 guid) { return GetPet(guid); }
         static Player* GetPlayer(Unit const &, uint64 guid) { return FindPlayer(guid); }
-        static GameObject* GetGameObject(WorldObject const &, uint64);
-        static DynamicObject* GetDynamicObject(WorldObject const &, uint64);
         static Corpse* GetCorpse(WorldObject const &u, uint64 guid);
         static Pet* GetPet(uint64 guid);
         static Player* FindPlayer(uint64);
@@ -188,7 +184,6 @@ class MANGOS_DLL_DECL ObjectAccessor : public MaNGOS::Singleton<ObjectAccessor, 
         }
 
         void Update(uint32 diff);
-        void UpdatePlayers(uint32 diff);
 
         Corpse* GetCorpseForPlayerGUID(uint64 guid);
         void RemoveCorpse(Corpse *corpse);
@@ -214,7 +209,7 @@ class MANGOS_DLL_DECL ObjectAccessor : public MaNGOS::Singleton<ObjectAccessor, 
         friend struct WorldObjectChangeAccumulator;
         Player2CorpsesMapType   i_player2corpse;
 
-        typedef ZThread::FastMutex LockType;
+        typedef ACE_Thread_Mutex LockType;
         typedef MaNGOS::GeneralLock<LockType > Guard;
 
         static void _buildChangeObjectForPlayer(WorldObject *, UpdateDataMapType &);

@@ -51,6 +51,43 @@ pkgdata_DATA = \
 	019_7622_03_mangos_creature_ai_texts.sql \
 	020_7643_01_mangos_db_version.sql \
 	020_7643_02_mangos_mangos_string.sql \
+	021_01_mangos_spell_proc_event.sql \
+	022_01_mangos_spell_proc_event.sql \
+	023_01_mangos_spell_proc_event.sql \
+	024_01_mangos_spell_proc_event.sql \
+	025_7705_01_mangos_command.sql \
+	026_7706_01_mangos_command.sql \
+	027_7714_01_mangos_command.sql \
+	028_7720_01_mangos_mangos_string.sql \
+	029_7393_01_mangos_game_event.sql \
+	030_7303_01_mangos_pools.sql \
+	031_7796_01_mangos_command.sql \
+	031_7796_02_mangos_mangos_string.sql \
+	032_7059_01_characters_character_spell.sql \
+	032_7059_02_characters_pet_spell.sql \
+	033_7839_01_mangos_mangos_string.sql \
+	033_7839_02_mangos_command.sql \
+	034_7850_01_mangos_command.sql \
+	035_7855_01_mangos_pools.sql \
+	036_7867_01_realmd_account.sql \
+	037_7893_01_mangos_command.sql \
+	038_7886_01_mangos_petcreateinfo_spell.sql \
+	039_7896_01_mangos_creature_template.sql \
+	040_7902_01_mangos_pool_creature.sql \
+	040_7902_02_mangos_pool_gameobject.sql \
+	041_7932_01_characters_character_pet.sql \
+	042_7938_01_realmd_account.sql \
+	043_7945_01_mangos_quest_template.sql \
+	044_7980_01_mangos_item_required_target.sql \
+	045_8098_01_characters_character_action.sql \
+	045_8098_02_mangos_playercreateinfo_action.sql \
+	045_8098_03_characters_character_pet.sql \
+	045_8098_04_characters_pet_spell.sql \
+	046_7349_01_mangos_spell_area.sql \
+	047_7376_01_mangos_spell_area.sql \
+	048_7382_01_mangos_creature_template.sql \
+        049_8104_01_characters.sql \
+	050_8115_01_mangos_playercreateinfo_action.sql \
 	README
 
 ## Additional files to include when running 'make dist'
@@ -81,4 +118,41 @@ EXTRA_DIST = \
 	019_7622_03_mangos_creature_ai_texts.sql \
 	020_7643_01_mangos_db_version.sql \
 	020_7643_02_mangos_mangos_string.sql \
+	021_01_mangos_spell_proc_event.sql \
+	022_01_mangos_spell_proc_event.sql \
+	023_01_mangos_spell_proc_event.sql \
+	024_01_mangos_spell_proc_event.sql \
+	025_7705_01_mangos_command.sql \
+	026_7706_01_mangos_command.sql \
+	027_7714_01_mangos_command.sql \
+	028_7720_01_mangos_mangos_string.sql \
+	029_7393_01_mangos_game_event.sql \
+	030_7303_01_mangos_pools.sql \
+	031_7796_01_mangos_command.sql \
+	031_7796_02_mangos_mangos_string.sql \
+	032_7059_01_characters_character_spell.sql \
+	032_7059_02_characters_pet_spell.sql \
+	033_7839_01_mangos_mangos_string.sql \
+	033_7839_02_mangos_command.sql \
+	034_7850_01_mangos_command.sql \
+	035_7855_01_mangos_pools.sql \
+	036_7867_01_realmd_account.sql \
+	037_7893_01_mangos_command.sql \
+	038_7886_01_mangos_petcreateinfo_spell.sql \
+	039_7896_01_mangos_creature_template.sql \
+	040_7902_01_mangos_pool_creature.sql \
+	040_7902_02_mangos_pool_gameobject.sql \
+	041_7932_01_characters_character_pet.sql \
+	042_7938_01_realmd_account.sql \
+	043_7945_01_mangos_quest_template.sql \
+	044_7980_01_mangos_item_required_target.sql \
+	045_8098_01_characters_character_action.sql \
+	045_8098_02_mangos_playercreateinfo_action.sql \
+	045_8098_03_characters_character_pet.sql \
+	045_8098_04_characters_pet_spell.sql \
+	046_7349_01_mangos_spell_area.sql \
+	047_7376_01_mangos_spell_area.sql \
+	048_7382_01_mangos_creature_template.sql \
+        049_8104_01_characters.sql \
+	050_8115_01_mangos_playercreateinfo_action.sql \
 	README

@@ -82,7 +82,7 @@ bool Guild::create(Player* leader, std::string gname)
     CharacterDatabase.PExecute("DELETE FROM guild_rank WHERE guildid='%u'", Id);
     CharacterDatabase.PExecute("DELETE FROM guild_member WHERE guildid='%u'", Id);
     CharacterDatabase.PExecute("INSERT INTO guild (guildid,name,leaderguid,info,motd,createdate,EmblemStyle,EmblemColor,BorderStyle,BorderColor,BackgroundColor,BankMoney) "
-        "VALUES('%u','%s','%u', '%s', '%s', NOW(),'%u','%u','%u','%u','%u','" I64FMTD "')",
+        "VALUES('%u','%s','%u', '%s', '%s', NOW(),'%u','%u','%u','%u','%u','" UI64FMTD "')",
         Id, gname.c_str(), GUID_LOPART(leaderGuid), dbGINFO.c_str(), dbMOTD.c_str(), EmblemStyle, EmblemColor, BorderStyle, BorderColor, BackgroundColor, guildbank_money);
     CharacterDatabase.CommitTransaction();
 
@@ -544,7 +544,7 @@ void Guild::BroadcastToOfficers(WorldSession *session, const std::string& msg, u
 {
     if (session && session->GetPlayer() && HasRankRight(session->GetPlayer()->GetRank(),GR_RIGHT_OFFCHATSPEAK))
     {
-        for(MemberList::iterator itr = members.begin(); itr != members.end(); ++itr)
+        for(MemberList::const_iterator itr = members.begin(); itr != members.end(); ++itr)
         {
             WorldPacket data;
             ChatHandler::FillMessageData(&data, session, CHAT_MSG_OFFICER, language, NULL, 0, msg.c_str(),NULL);
@@ -559,7 +559,7 @@ void Guild::BroadcastToOfficers(WorldSession *session, const std::string& msg, u
 
 void Guild::BroadcastPacket(WorldPacket *packet)
 {
-    for(MemberList::iterator itr = members.begin(); itr != members.end(); ++itr)
+    for(MemberList::const_iterator itr = members.begin(); itr != members.end(); ++itr)
     {
         Player *player = ObjectAccessor::FindPlayer(MAKE_NEW_GUID(itr->first, 0, HIGHGUID_PLAYER));
         if(player)
@@ -569,7 +569,7 @@ void Guild::BroadcastPacket(WorldPacket *packet)
 
 void Guild::BroadcastPacketToRank(WorldPacket *packet, uint32 rankId)
 {
-    for(MemberList::iterator itr = members.begin(); itr != members.end(); ++itr)
+    for(MemberList::const_iterator itr = members.begin(); itr != members.end(); ++itr)
     {
         if (itr->second.RankId == rankId)
         {
@@ -656,7 +656,7 @@ void Guild::SetRankRights(uint32 rankId, uint32 rights)
 
 int32 Guild::GetRank(uint32 LowGuid)
 {
-    MemberList::iterator itr = members.find(LowGuid);
+    MemberList::const_iterator itr = members.find(LowGuid);
     if (itr==members.end())
         return -1;
 
@@ -671,7 +671,7 @@ void Guild::Disband()
 
     while (!members.empty())
     {
-        MemberList::iterator itr = members.begin();
+        MemberList::const_iterator itr = members.begin();
         DelMember(MAKE_NEW_GUID(itr->first, 0, HIGHGUID_PLAYER), true);
     }
 
@@ -915,7 +915,7 @@ void Guild::LogGuildEvent(uint8 EventType, uint32 PlayerGuid1, uint32 PlayerGuid
     // Add entry to map
     m_GuildEventlog.push_back(NewEvent);
     // Add new eventlog entry into DB
-    CharacterDatabase.PExecute("INSERT INTO guild_eventlog (guildid, LogGuid, EventType, PlayerGuid1, PlayerGuid2, NewRank, TimeStamp) VALUES ('%u','%u','%u','%u','%u','%u','" I64FMTD "')",
+    CharacterDatabase.PExecute("INSERT INTO guild_eventlog (guildid, LogGuid, EventType, PlayerGuid1, PlayerGuid2, NewRank, TimeStamp) VALUES ('%u','%u','%u','%u','%u','%u','" UI64FMTD "')",
         Id, NewEvent->LogGuid, uint32(NewEvent->EventType), NewEvent->PlayerGuid1, NewEvent->PlayerGuid2, uint32(NewEvent->NewRank), NewEvent->TimeStamp);
 }
 
@@ -1298,7 +1298,7 @@ void Guild::SetBankMoney(int64 money)
         money = 0;
     guildbank_money = money;
 
-    CharacterDatabase.PExecute("UPDATE guild SET BankMoney='" I64FMTD "' WHERE guildid='%u'", money, Id);
+    CharacterDatabase.PExecute("UPDATE guild SET BankMoney='" UI64FMTD "' WHERE guildid='%u'", money, Id);
 }
 
 // *************************************************
@@ -1639,7 +1639,7 @@ void Guild::LogBankEvent(uint8 LogEntry, uint8 TabId, uint32 PlayerGuidLow, uint
         }
         m_GuildBankEventLog_Item[TabId].push_back(NewEvent);
     }
-    CharacterDatabase.PExecute("INSERT INTO guild_bank_eventlog (guildid,LogGuid,LogEntry,TabId,PlayerGuid,ItemOrMoney,ItemStackCount,DestTabId,TimeStamp) VALUES ('%u','%u','%u','%u','%u','%u','%u','%u','" I64FMTD "')",
+    CharacterDatabase.PExecute("INSERT INTO guild_bank_eventlog (guildid,LogGuid,LogEntry,TabId,PlayerGuid,ItemOrMoney,ItemStackCount,DestTabId,TimeStamp) VALUES ('%u','%u','%u','%u','%u','%u','%u','%u','" UI64FMTD "')",
         Id, NewEvent->LogGuid, uint32(NewEvent->LogEntry), uint32(TabId), NewEvent->PlayerGuid, NewEvent->ItemOrMoney, uint32(NewEvent->ItemStackCount), uint32(NewEvent->DestTabId), NewEvent->TimeStamp);
 }
 

@@ -66,6 +66,12 @@ enum ItemSpelltriggerType
     ITEM_SPELLTRIGGER_ON_EQUIP        = 1,
     ITEM_SPELLTRIGGER_CHANCE_ON_HIT   = 2,
     ITEM_SPELLTRIGGER_SOULSTONE       = 4,
+    /*
+     * ItemSpelltriggerType 5 might have changed on 2.4.3/3.0.3: Such auras
+     * will be applied on item pickup and removed on item loss - maybe on the
+     * other hand the item is destroyed if the aura is removed ("removed on
+     * death" of spell 57348 makes me think so)
+     */
     ITEM_SPELLTRIGGER_ON_NO_DELAY_USE = 5,                  // no equip cooldown
     ITEM_SPELLTRIGGER_LEARN_SPELL_ID  = 6                   // used in item_template.spell_2 with spell_id with SPELL_GENERIC_LEARN in spell_1
 };
@@ -87,10 +93,11 @@ enum ItemBondingType
 // masks for ITEM_FIELD_FLAGS field
 enum ITEM_FLAGS
 {
-    ITEM_FLAGS_BINDED                         = 0x00000001,
+    ITEM_FLAGS_BINDED                         = 0x00000001, // set in game at binding, not set in template
     ITEM_FLAGS_CONJURED                       = 0x00000002,
     ITEM_FLAGS_OPENABLE                       = 0x00000004,
     ITEM_FLAGS_WRAPPED                        = 0x00000008,
+    ITEM_FLAGS_BROKEN                         = 0x00000010, // appears red icon (like when item durability==0)
     ITEM_FLAGS_WRAPPER                        = 0x00000200, // used or not used wrapper
     ITEM_FLAGS_PARTY_LOOT                     = 0x00000800, // determines if item is party loot or not
     ITEM_FLAGS_CHARTER                        = 0x00002000, // arena/guild charter
@@ -98,12 +105,13 @@ enum ITEM_FLAGS
     ITEM_FLAGS_USEABLE_IN_ARENA               = 0x00200000,
     ITEM_FLAGS_THROWABLE                      = 0x00400000, // not used in game for check trow possibility, only for item in game tooltip
     ITEM_FLAGS_SPECIALUSE                     = 0x00800000, // last used flag in 2.3.0
-    ITEM_FLAGS_BOA                            = 0x08000000, // bind on account
+    ITEM_FLAGS_BOA                            = 0x08000000, // bind on account (set in template for items that can binded in like way)
     ITEM_FLAGS_MILLABLE                       = 0x20000000
 };
 
 enum BAG_FAMILY_MASK
 {
+    BAG_FAMILY_MASK_NONE                      = 0x00000000,
     BAG_FAMILY_MASK_ARROWS                    = 0x00000001,
     BAG_FAMILY_MASK_BULLETS                   = 0x00000002,
     BAG_FAMILY_MASK_SOUL_SHARDS               = 0x00000004,
@@ -532,7 +540,7 @@ struct ItemPrototype
     uint32 MaxDurability;
     uint32 Area;                                            // id from AreaTable.dbc
     uint32 Map;                                             // id from Map.dbc
-    uint32 BagFamily;                                       // bit string (1 << id from ItemBagFamily.dbc)
+    uint32 BagFamily;                                       // bit mask (1 << id from ItemBagFamily.dbc)
     uint32 TotemCategory;                                   // id from TotemCategory.dbc
     _Socket Socket[MAX_ITEM_PROTO_SOCKETS];
     uint32 socketBonus;                                     // id from SpellItemEnchantment.dbc

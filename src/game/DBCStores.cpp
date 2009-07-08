@@ -50,13 +50,15 @@ DBCStorage <CreatureSpellDataEntry> sCreatureSpellDataStore(CreatureSpellDatafmt
 DBCStorage <DurabilityQualityEntry> sDurabilityQualityStore(DurabilityQualityfmt);
 DBCStorage <DurabilityCostsEntry> sDurabilityCostsStore(DurabilityCostsfmt);
 
-DBCStorage <EmotesTextEntry> sEmotesTextStore(EmoteEntryfmt);
+DBCStorage <EmotesEntry> sEmotesStore(EmotesEntryfmt);
+DBCStorage <EmotesTextEntry> sEmotesTextStore(EmotesTextEntryfmt);
 
 typedef std::map<uint32,SimpleFactionsList> FactionTeamMap;
 static FactionTeamMap sFactionTeamMap;
 DBCStorage <FactionEntry> sFactionStore(FactionEntryfmt);
 DBCStorage <FactionTemplateEntry> sFactionTemplateStore(FactionTemplateEntryfmt);
 
+DBCStorage <GameObjectDisplayInfoEntry> sGameObjectDisplayInfoStore(GameObjectDisplayInfofmt);
 DBCStorage <GemPropertiesEntry> sGemPropertiesStore(GemPropertiesEntryfmt);
 
 DBCStorage <GtCombatRatingsEntry>         sGtCombatRatingsStore(GtCombatRatingsfmt);
@@ -105,6 +107,7 @@ DBCStorage <SpellRadiusEntry> sSpellRadiusStore(SpellRadiusfmt);
 DBCStorage <SpellRangeEntry> sSpellRangeStore(SpellRangefmt);
 DBCStorage <SpellShapeshiftEntry> sSpellShapeshiftStore(SpellShapeshiftfmt);
 DBCStorage <StableSlotPricesEntry> sStableSlotPricesStore(StableSlotPricesfmt);
+//DBCStorage <SummonPropertiesEntry> sSummonPropertiesStore(SummonPropertiesfmt);
 DBCStorage <TalentEntry> sTalentStore(TalentEntryfmt);
 TalentSpellPosMap sTalentSpellPosMap;
 DBCStorage <TalentTabEntry> sTalentTabStore(TalentTabEntryfmt);
@@ -128,6 +131,7 @@ TaxiPathNodesByPath sTaxiPathNodesByPath;
 static DBCStorage <TaxiPathNodeEntry> sTaxiPathNodeStore(TaxiPathNodeEntryfmt);
 DBCStorage <TotemCategoryEntry> sTotemCategoryStore(TotemCategoryEntryfmt);
 DBCStorage <WorldMapAreaEntry>  sWorldMapAreaStore(WorldMapAreaEntryfmt);
+//DBCStorage <WorldMapOverlayEntry> sWorldMapOverlayStore(WorldMapOverlayEntryfmt);
 DBCStorage <WorldSafeLocsEntry> sWorldSafeLocsStore(WorldSafeLocsEntryfmt);
 
 typedef std::list<std::string> StoreProblemList;
@@ -180,7 +184,7 @@ void LoadDBCStores(const std::string& dataPath)
 {
     std::string dbcPath = dataPath+"dbc/";
 
-    const uint32 DBCFilesCount = 59;
+    const uint32 DBCFilesCount = 61;
 
     barGoLink bar( DBCFilesCount );
 
@@ -219,6 +223,7 @@ void LoadDBCStores(const std::string& dataPath)
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sCreatureSpellDataStore,   dbcPath,"CreatureSpellData.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sDurabilityCostsStore,     dbcPath,"DurabilityCosts.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sDurabilityQualityStore,   dbcPath,"DurabilityQuality.dbc");
+    LoadDBC(availableDbcLocales,bar,bad_dbc_files,sEmotesStore,              dbcPath,"Emotes.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sEmotesTextStore,          dbcPath,"EmotesText.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sFactionStore,             dbcPath,"Faction.dbc");
     for (uint32 i=0;i<sFactionStore.GetNumRows(); ++i)
@@ -232,6 +237,7 @@ void LoadDBCStores(const std::string& dataPath)
     }
 
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sFactionTemplateStore,     dbcPath,"FactionTemplate.dbc");
+    LoadDBC(availableDbcLocales,bar,bad_dbc_files,sGameObjectDisplayInfoStore,dbcPath,"GameObjectDisplayInfo.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sGemPropertiesStore,       dbcPath,"GemProperties.dbc");
 
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sGtCombatRatingsStore,     dbcPath,"gtCombatRatings.dbc");
@@ -310,6 +316,7 @@ void LoadDBCStores(const std::string& dataPath)
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sSpellRangeStore,          dbcPath,"SpellRange.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sSpellShapeshiftStore,     dbcPath,"SpellShapeshiftForm.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sStableSlotPricesStore,    dbcPath,"StableSlotPrices.dbc");
+    //LoadDBC(availableDbcLocales,bar,bad_dbc_files,sSummonPropertiesStore,    dbcPath,"SummonProperties.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sTalentStore,              dbcPath,"Talent.dbc");
 
     // create talent spells set
@@ -429,6 +436,7 @@ void LoadDBCStores(const std::string& dataPath)
 
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sTotemCategoryStore,       dbcPath,"TotemCategory.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sWorldMapAreaStore,        dbcPath,"WorldMapArea.dbc");
+    //LoadDBC(availableDbcLocales,bar,bad_dbc_files,sWorldMapOverlayStore,     dbcPath,"WorldMapOverlay.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sWorldSafeLocsStore,       dbcPath,"WorldSafeLocs.dbc");
 
     // error checks
@@ -660,3 +668,5 @@ MANGOS_DLL_SPEC DBCStorage <SpellRangeEntry>    const* GetSpellRangeStore()     
 MANGOS_DLL_SPEC DBCStorage <FactionEntry>       const* GetFactionStore()        { return &sFactionStore;        }
 MANGOS_DLL_SPEC DBCStorage <ItemEntry>          const* GetItemDisplayStore()    { return &sItemStore;           }
 MANGOS_DLL_SPEC DBCStorage <CreatureDisplayInfoEntry> const* GetCreatureDisplayStore() { return &sCreatureDisplayInfoStore; }
+MANGOS_DLL_SPEC DBCStorage <EmotesEntry>        const* GetEmotesStore()         { return &sEmotesStore;         }
+MANGOS_DLL_SPEC DBCStorage <EmotesTextEntry>    const* GetEmotesTextStore()     { return &sEmotesTextStore;     }

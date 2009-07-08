@@ -958,6 +958,7 @@ enum Targets
     TARGET_RANDOM_ENEMY_CHAIN_IN_AREA  = 2,                 // only one spell has that, but regardless, it's a target type after all
     TARGET_PET                         = 5,
     TARGET_CHAIN_DAMAGE                = 6,
+    TARGET_AREAEFFECT_INSTANT          = 7,                 // targets around provided destination point
     TARGET_AREAEFFECT_CUSTOM           = 8,
     TARGET_INNKEEPER_COORDINATES       = 9,                 // uses in teleport to innkeeper spells
     TARGET_ALL_ENEMY_IN_AREA           = 15,
@@ -966,7 +967,7 @@ enum Targets
     TARGET_EFFECT_SELECT               = 18,                // highly depends on the spell effect
     TARGET_ALL_PARTY_AROUND_CASTER     = 20,
     TARGET_SINGLE_FRIEND               = 21,
-    TARGET_ALL_AROUND_CASTER           = 22,                // used only in TargetA, target selection dependent from TargetB
+    TARGET_CASTER_COORDINATES          = 22,                // used only in TargetA, target selection dependent from TargetB
     TARGET_GAMEOBJECT                  = 23,
     TARGET_IN_FRONT_OF_CASTER          = 24,
     TARGET_DUELVSPLAYER                = 25,
@@ -997,6 +998,7 @@ enum Targets
     TARGET_AREAEFFECT_PARTY_AND_CLASS  = 61,
     TARGET_DUELVSPLAYER_COORDINATES    = 63,
     TARGET_BEHIND_VICTIM               = 65,                // uses in teleport behind spells
+    TARGET_DYNAMIC_OBJECT_COORDINATES  = 76,
     TARGET_SINGLE_ENEMY                = 77,
     TARGET_SELF2                       = 87,
     TARGET_NONCOMBAT_PET               = 90,
@@ -1022,9 +1024,10 @@ enum SpellHitType
 {
     SPELL_HIT_TYPE_UNK1 = 0x00001,
     SPELL_HIT_TYPE_CRIT = 0x00002,
-    SPELL_HIT_TYPE_UNK2 = 0x00004,
-    SPELL_HIT_TYPE_UNK3 = 0x00008,
-    SPELL_HIT_TYPE_UNK4 = 0x00020
+    SPELL_HIT_TYPE_UNK3 = 0x00004,
+    SPELL_HIT_TYPE_UNK4 = 0x00008,
+    SPELL_HIT_TYPE_UNK5 = 0x00010,
+    SPELL_HIT_TYPE_UNK6 = 0x00020
 };
 
 enum SpellDmgClass
@@ -1300,7 +1303,7 @@ enum Emote
     EMOTE_ONESHOT_POINT                = 25,
     EMOTE_STATE_STAND                  = 26,
     EMOTE_STATE_READYUNARMED           = 27,
-    EMOTE_STATE_WORK                   = 28,
+    EMOTE_STATE_WORK_SHEATHED          = 28,
     EMOTE_STATE_POINT                  = 29,
     EMOTE_STATE_NONE                   = 30,
     EMOTE_ONESHOT_WOUND                = 33,
@@ -1333,13 +1336,13 @@ enum Emote
     EMOTE_ONESHOT_SALUTE_NOSHEATH      = 113,
     EMOTE_STATE_USESTANDING_NOSHEATHE  = 133,
     EMOTE_ONESHOT_LAUGH_NOSHEATHE      = 153,
-    EMOTE_STATE_WORK_NOSHEATHE         = 173,
+    EMOTE_STATE_WORK                   = 173,
     EMOTE_STATE_SPELLPRECAST           = 193,
     EMOTE_ONESHOT_READYRIFLE           = 213,
     EMOTE_STATE_READYRIFLE             = 214,
-    EMOTE_STATE_WORK_NOSHEATHE_MINING  = 233,
-    EMOTE_STATE_WORK_NOSHEATHE_CHOPWOOD= 234,
-    EMOTE_zzOLDONESHOT_LIFTOFF         = 253,
+    EMOTE_STATE_WORK_MINING            = 233,
+    EMOTE_STATE_WORK_CHOPWOOD          = 234,
+    EMOTE_STATE_APPLAUD                = 253,
     EMOTE_ONESHOT_LIFTOFF              = 254,
     EMOTE_ONESHOT_YES                  = 273,
     EMOTE_ONESHOT_NO                   = 274,
@@ -1389,7 +1392,8 @@ enum Emote
     EMOTE_ONESHOT_CUSTOMSPELL10        = 411,
     EMOTE_STATE_EXCLAIM                = 412,
     EMOTE_STATE_SIT_CHAIR_MED          = 415,
-    EMOTE_STATE_SPELLEFFECT_HOLD       = 422
+    EMOTE_STATE_SPELLEFFECT_HOLD       = 422,
+    EMOTE_STATE_EAT_NO_SHEATHE         = 423,
 };
 
 enum Anim
@@ -1679,6 +1683,7 @@ enum CreatureType
 };
 
 uint32 const CREATURE_TYPEMASK_HUMANOID_OR_UNDEAD = (1 << (CREATURE_TYPE_HUMANOID-1)) | (1 << (CREATURE_TYPE_UNDEAD-1));
+uint32 const CREATURE_TYPEMASK_MECHANICAL_OR_ELEMENTAL = (1 << (CREATURE_TYPE_MECHANICAL-1)) | (1 << (CREATURE_TYPE_ELEMENTAL-1));
 
 enum CreatureFamily
 {
@@ -1730,6 +1735,28 @@ enum CreatureEliteType
     CREATURE_ELITE_WORLDBOSS       = 3,
     CREATURE_ELITE_RARE            = 4,
     CREATURE_UNKNOWN               = 5                      // found in 2.2.3 for 2 mobs
+};
+
+enum HolidayIds
+{
+    HOLIDAY_FIREWORKS_SPECTACULAR    = 62,
+    HOLIDAY_FEAST_OF_WINTER_VEIL     = 141,
+    HOLIDAY_NOBLEGARDEN              = 181,
+    HOLIDAY_CHILDRENS_WEEK           = 201,
+    HOLIDAY_CALL_TO_ARMS_AV          = 283,
+    HOLIDAY_CALL_TO_ARMS_WG          = 284,
+    HOLIDAY_CALL_TO_ARMS_AB          = 285,
+    HOLIDAY_FISHING_EXTRAVAGANZA     = 301,
+    HOLIDAY_HARVEST_FESTIVAL         = 321,
+    HOLIDAY_HALLOWS_END              = 324,
+    HOLIDAY_LUNAR_FESTIVAL           = 327,
+    HOLIDAY_LOVE_IS_IN_THE_AIR       = 335,
+    HOLIDAY_FIRE_FESTIVAL            = 341,
+    HOLIDAY_CALL_TO_ARMS_ES          = 353,
+    HOLIDAY_BREWFEST                 = 372,
+    HOLIDAY_DARKMOON_FAIRE_ELWYNN    = 374,
+    HOLIDAY_DARKMOON_FAIRE_THUNDER   = 375,
+    HOLIDAY_DARKMOON_FAIRE_SHATTRATH = 376,
 };
 
 // values based at QuestInfo.dbc
@@ -1820,8 +1847,8 @@ enum SkillType
     SKILL_BEAST_MASTERY            = 50,
     SKILL_SURVIVAL                 = 51,
     SKILL_MACES                    = 54,
-    SKILL_HOLY                     = 56,
     SKILL_2H_SWORDS                = 55,
+    SKILL_HOLY                     = 56,
     SKILL_SHADOW                   = 78,
     SKILL_DEFENSE                  = 95,
     SKILL_LANG_COMMON              = 98,
@@ -1877,8 +1904,8 @@ enum SkillType
     SKILL_PET_BOAR                 = 211,
     SKILL_PET_CROCILISK            = 212,
     SKILL_PET_CARRION_BIRD         = 213,
-    SKILL_PET_GORILLA              = 215,
     SKILL_PET_CRAB                 = 214,
+    SKILL_PET_GORILLA              = 215,
     SKILL_PET_RAPTOR               = 217,
     SKILL_PET_TALLSTRIDER          = 218,
     SKILL_RACIAL_UNDED             = 220,
@@ -1981,14 +2008,14 @@ inline uint32 SkillByQuestSort(int32 QuestSort)
 
 enum SkillCategory
 {
-    SKILL_CATEGORY_ATTRIBUTES    =  5,
-    SKILL_CATEGORY_WEAPON        =  6,
-    SKILL_CATEGORY_CLASS         =  7,
-    SKILL_CATEGORY_ARMOR         =  8,
-    SKILL_CATEGORY_SECONDARY     =  9,                      // secondary professions
+    SKILL_CATEGORY_ATTRIBUTES    = 5,
+    SKILL_CATEGORY_WEAPON        = 6,
+    SKILL_CATEGORY_CLASS         = 7,
+    SKILL_CATEGORY_ARMOR         = 8,
+    SKILL_CATEGORY_SECONDARY     = 9,                       // secondary professions
     SKILL_CATEGORY_LANGUAGES     = 10,
     SKILL_CATEGORY_PROFESSION    = 11,                      // primary professions
-    SKILL_CATEGORY_NOT_DISPLAYED = 12
+    SKILL_CATEGORY_GENERIC       = 12
 };
 
 enum TotemCategory
@@ -2030,11 +2057,11 @@ enum CorpseDynFlags
 };
 
 // Passive Spell codes explicit used in code
-#define SPELL_ID_GENERIC_LEARN                   483
-#define SPELL_ID_PASSIVE_BATTLE_STANCE           2457
-#define SPELL_ID_PASSIVE_RESURRECTION_SICKNESS   15007
-#define SPELL_ID_WEAPON_SWITCH_COOLDOWN_1_5s     6119
-#define SPELL_ID_WEAPON_SWITCH_COOLDOWN_1_0s     6123
+#define SPELL_ID_GENERIC_LEARN                  483
+#define SPELL_ID_PASSIVE_BATTLE_STANCE          2457
+#define SPELL_ID_PASSIVE_RESURRECTION_SICKNESS  15007
+#define SPELL_ID_WEAPON_SWITCH_COOLDOWN_1_5s    6119
+#define SPELL_ID_WEAPON_SWITCH_COOLDOWN_1_0s    6123
 
 enum WeatherType
 {
@@ -2336,5 +2363,32 @@ enum BattleGroundTypeId
     BATTLEGROUND_RL            = 8
 };
 #define MAX_BATTLEGROUND_TYPE_ID 9
+
+enum MailResponseType
+{
+    MAIL_SEND               = 0,
+    MAIL_MONEY_TAKEN        = 1,
+    MAIL_ITEM_TAKEN         = 2,
+    MAIL_RETURNED_TO_SENDER = 3,
+    MAIL_DELETED            = 4,
+    MAIL_MADE_PERMANENT     = 5
+};
+
+enum MailResponseResult
+{
+    MAIL_OK                            = 0,
+    MAIL_ERR_EQUIP_ERROR               = 1,
+    MAIL_ERR_CANNOT_SEND_TO_SELF       = 2,
+    MAIL_ERR_NOT_ENOUGH_MONEY          = 3,
+    MAIL_ERR_RECIPIENT_NOT_FOUND       = 4,
+    MAIL_ERR_NOT_YOUR_TEAM             = 5,
+    MAIL_ERR_INTERNAL_ERROR            = 6,
+    MAIL_ERR_DISABLED_FOR_TRIAL_ACC    = 14,
+    MAIL_ERR_RECIPIENT_CAP_REACHED     = 15,
+    MAIL_ERR_CANT_SEND_WRAPPED_COD     = 16,
+    MAIL_ERR_MAIL_AND_CHAT_SUSPENDED   = 17,
+    MAIL_ERR_TOO_MANY_ATTACHMENTS      = 18,
+    MAIL_ERR_MAIL_ATTACHMENT_INVALID   = 19,
+};
 
 #endif

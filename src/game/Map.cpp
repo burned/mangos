@@ -116,14 +116,14 @@ void Map::LoadVMap(int gx,int gy)
     }
 }
 
-void Map::LoadMap(int gx,int gy)
+void Map::LoadMap(int gx,int gy, bool reload)
 {
     if( i_InstanceId != 0 )
     {
         if(GridMaps[gx][gy])
             return;
 
-        Map* baseMap = const_cast<Map*>(MapManager::Instance().GetBaseMap(i_id));
+        Map* baseMap = const_cast<Map*>(MapManager::Instance().CreateBaseMap(i_id));
 
         // load grid map for base map
         if (!baseMap->GridMaps[gx][gy])
@@ -133,6 +133,9 @@ void Map::LoadMap(int gx,int gy)
         GridMaps[gx][gy] = baseMap->GridMaps[gx][gy];
         return;
     }
+
+    if(GridMaps[gx][gy] && !reload)
+        return;
 
     //map already load, delete it before reloading (Is it necessary? Do we really need the ability the reload maps during runtime?)
     if(GridMaps[gx][gy])
@@ -184,8 +187,9 @@ void Map::DeleteStateMachine()
 
 Map::Map(uint32 id, time_t expiry, uint32 InstanceId, uint8 SpawnMode)
   : i_mapEntry (sMapStore.LookupEntry(id)), i_spawnMode(SpawnMode),
-  i_id(id), i_InstanceId(InstanceId), m_unloadTimer(0), i_gridExpiry(expiry),
-  m_activeNonPlayersIter(m_activeNonPlayers.end())
+  i_id(id), i_InstanceId(InstanceId), m_unloadTimer(0),
+  m_activeNonPlayersIter(m_activeNonPlayers.end()),
+  i_gridExpiry(expiry)
 {
     for(unsigned int idx=0; idx < MAX_NUMBER_OF_GRIDS; ++idx)
     {
@@ -419,13 +423,12 @@ template<class T>
 void
 Map::Add(T *obj)
 {
-    CellPair p = MaNGOS::ComputeCellPair(obj->GetPositionX(), obj->GetPositionY());
-
     assert(obj);
 
+    CellPair p = MaNGOS::ComputeCellPair(obj->GetPositionX(), obj->GetPositionY());
     if(p.x_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP || p.y_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP )
     {
-        sLog.outError("Map::Add: Object " I64FMTD " have invalid coordinates X:%f Y:%f grid cell [%u:%u]", obj->GetGUID(), obj->GetPositionX(), obj->GetPositionY(), p.x_coord, p.y_coord);
+        sLog.outError("Map::Add: Object (GUID: %u TypeId: %u) have invalid coordinates X:%f Y:%f grid cell [%u:%u]", obj->GetGUIDLow(), obj->GetTypeId(), obj->GetPositionX(), obj->GetPositionY(), p.x_coord, p.y_coord);
         return;
     }
 
@@ -479,7 +482,7 @@ void Map::MessageBroadcast(WorldObject *obj, WorldPacket *msg)
 
     if(p.x_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP || p.y_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP )
     {
-        sLog.outError("Map::MessageBroadcast: Object " I64FMTD " have invalid coordinates X:%f Y:%f grid cell [%u:%u]", obj->GetGUID(), obj->GetPositionX(), obj->GetPositionY(), p.x_coord, p.y_coord);
+        sLog.outError("Map::MessageBroadcast: Object (GUID: %u TypeId: %u) have invalid coordinates X:%f Y:%f grid cell [%u:%u]", obj->GetGUIDLow(), obj->GetTypeId(), obj->GetPositionX(), obj->GetPositionY(), p.x_coord, p.y_coord);
         return;
     }
 
@@ -524,7 +527,7 @@ void Map::MessageDistBroadcast(WorldObject *obj, WorldPacket *msg, float dist)
 
     if(p.x_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP || p.y_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP )
     {
-        sLog.outError("Map::MessageBroadcast: Object " I64FMTD " have invalid coordinates X:%f Y:%f grid cell [%u:%u]", obj->GetGUID(), obj->GetPositionX(), obj->GetPositionY(), p.x_coord, p.y_coord);
+        sLog.outError("Map::MessageBroadcast: Object (GUID: %u TypeId: %u) have invalid coordinates X:%f Y:%f grid cell [%u:%u]", obj->GetGUIDLow(), obj->GetTypeId(), obj->GetPositionX(), obj->GetPositionY(), p.x_coord, p.y_coord);
         return;
     }
 
@@ -548,6 +551,15 @@ bool Map::loaded(const GridPair &p) const
 
 void Map::Update(const uint32 &t_diff)
 {
+    /// update players at tick
+    for(m_mapRefIter = m_mapRefManager.begin(); m_mapRefIter != m_mapRefManager.end(); ++m_mapRefIter)
+    {
+        Player* plr = m_mapRefIter->getSource();
+        if(plr && plr->IsInWorld())
+            plr->Update(t_diff);
+    }
+
+    /// update active cells around players and active objects
     resetMarkedCells();
 
     MaNGOS::ObjectUpdater updater(t_diff);
@@ -729,7 +741,7 @@ Map::Remove(T *obj, bool remove)
     CellPair p = MaNGOS::ComputeCellPair(obj->GetPositionX(), obj->GetPositionY());
     if(p.x_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP || p.y_coord >= TOTAL_NUMBER_OF_CELLS_PER_MAP )
     {
-        sLog.outError("Map::Remove: Object " I64FMT " have invalid coordinates X:%f Y:%f grid cell [%u:%u]", obj->GetGUID(), obj->GetPositionX(), obj->GetPositionY(), p.x_coord, p.y_coord);
+        sLog.outError("Map::Remove: Object (GUID: %u TypeId:%u) have invalid coordinates X:%f Y:%f grid cell [%u:%u]", obj->GetGUIDLow(), obj->GetTypeId(), obj->GetPositionX(), obj->GetPositionY(), p.x_coord, p.y_coord);
         return;
     }
 
@@ -737,7 +749,7 @@ Map::Remove(T *obj, bool remove)
     if( !loaded(GridPair(cell.data.Part.grid_x, cell.data.Part.grid_y)) )
         return;
 
-    DEBUG_LOG("Remove object " I64FMT " from grid[%u,%u]", obj->GetGUID(), cell.data.Part.grid_x, cell.data.Part.grid_y);
+    DEBUG_LOG("Remove object (GUID: %u TypeId:%u) from grid[%u,%u]", obj->GetGUIDLow(), obj->GetTypeId(), cell.data.Part.grid_x, cell.data.Part.grid_y);
     NGridType *grid = getNGrid(cell.GridX(), cell.GridY());
     assert( grid != NULL );
 
@@ -869,7 +881,6 @@ void Map::MoveAllCreaturesInMoveList()
                 if((sLog.getLogFilter() & LOG_FILTER_CREATURE_MOVES)==0)
                     sLog.outDebug("Creature (GUID: %u Entry: %u ) can't be move to unloaded respawn grid.",c->GetGUIDLow(),c->GetEntry());
                 #endif
-                c->CleanupsBeforeDelete();
                 AddObjectToRemoveList(c);
             }
         }
@@ -1019,7 +1030,7 @@ bool Map::UnloadGrid(const uint32 &x, const uint32 &y, bool pForce)
             VMAP::VMapFactory::createOrGetVMapManager()->unloadMap(GetId(), gy, gx);
         }
         else
-            ((MapInstanced*)(MapManager::Instance().GetBaseMap(i_id)))->RemoveGridMapReference(GridPair(gx, gy));
+            ((MapInstanced*)(MapManager::Instance().CreateBaseMap(i_id)))->RemoveGridMapReference(GridPair(gx, gy));
         GridMaps[gx][gy] = NULL;
     }
     DEBUG_LOG("Unloading grid[%u,%u] for map %u finished", x,y, i_id);
@@ -1690,7 +1701,7 @@ uint32 Map::GetAreaIdByAreaFlag(uint16 areaflag,uint32 map_id)
         return 0;
 }
 
-uint32 Map::GetAreaId(uint16 areaflag,uint32 map_id)
+uint32 Map::GetAreaIdByAreaFlag(uint16 areaflag,uint32 map_id)
 {
     AreaTableEntry const *entry = GetAreaEntryByAreaFlagAndMap(areaflag,map_id);
 
@@ -1700,7 +1711,7 @@ uint32 Map::GetAreaId(uint16 areaflag,uint32 map_id)
         return 0;
 }
 
-uint32 Map::GetZoneId(uint16 areaflag,uint32 map_id)
+uint32 Map::GetZoneIdByAreaFlag(uint16 areaflag,uint32 map_id)
 {
     AreaTableEntry const *entry = GetAreaEntryByAreaFlagAndMap(areaflag,map_id);
 
@@ -1708,6 +1719,14 @@ uint32 Map::GetZoneId(uint16 areaflag,uint32 map_id)
         return ( entry->zone != 0 ) ? entry->zone : entry->ID;
     else
         return 0;
+}
+
+void Map::GetZoneAndAreaIdByAreaFlag(uint32& zoneid, uint32& areaid, uint16 areaflag,uint32 map_id)
+{
+    AreaTableEntry const *entry = GetAreaEntryByAreaFlagAndMap(areaflag,map_id);
+
+    areaid = entry ? entry->ID : 0;
+    zoneid = entry ? (( entry->zone != 0 ) ? entry->zone : entry->ID) : 0;
 }
 
 bool Map::IsInWater(float x, float y, float pZ) const
@@ -1874,7 +1893,7 @@ void Map::SendInitTransports( Player * player )
 
     bool hasTransport = false;
 
-    for (MapManager::TransportSet::iterator i = tset.begin(); i != tset.end(); ++i)
+    for (MapManager::TransportSet::const_iterator i = tset.begin(); i != tset.end(); ++i)
     {
         // send data for current transport in other place
         if((*i) != player->GetTransport() && (*i)->GetMapId()==i_id)
@@ -1903,7 +1922,7 @@ void Map::SendRemoveTransports( Player * player )
     MapManager::TransportSet& tset = tmap[player->GetMapId()];
 
     // except used transport
-    for (MapManager::TransportSet::iterator i = tset.begin(); i != tset.end(); ++i)
+    for (MapManager::TransportSet::const_iterator i = tset.begin(); i != tset.end(); ++i)
         if((*i) != player->GetTransport() && (*i)->GetMapId()!=i_id)
             (*i)->BuildOutOfRangeUpdateBlock(&transData);
 
@@ -1931,6 +1950,8 @@ void Map::DoDelayedMovesAndRemoves()
 void Map::AddObjectToRemoveList(WorldObject *obj)
 {
     assert(obj->GetMapId()==GetId() && obj->GetInstanceId()==GetInstanceId());
+
+    obj->CleanupsBeforeDelete();                            // remove or simplify at least cross referenced links
 
     i_objectsToRemove.insert(obj);
     //sLog.outDebug("Object (GUID: %u TypeId: %u ) added to removing list.",obj->GetGUIDLow(),obj->GetTypeId());
@@ -2226,7 +2247,6 @@ bool InstanceMap::Add(Player *player)
         // first player enters (no players yet)
         SetResetSchedule(false);
 
-        player->SendInitWorldStates();
         sLog.outDetail("MAP: Player '%s' entered the instance '%u' of map '%s'", player->GetName(), GetInstanceId(), GetMapName());
         // initialize unload state
         m_unloadTimer = 0;
@@ -2482,4 +2502,46 @@ void BattleGroundMap::UnloadAll(bool pForce)
     }
 
     Map::UnloadAll(pForce);
+}
+
+Creature*
+Map::GetCreature(uint64 guid)
+{
+    Creature * ret = ObjectAccessor::GetObjectInWorld(guid, (Creature*)NULL);
+    if(!ret)
+        return NULL;
+
+    if(ret->GetMapId() != GetId())
+        return NULL;
+
+    if(ret->GetInstanceId() != GetInstanceId())
+        return NULL;
+
+    return ret;
+}
+
+GameObject*
+Map::GetGameObject(uint64 guid)
+{
+    GameObject * ret = ObjectAccessor::GetObjectInWorld(guid, (GameObject*)NULL);
+    if(!ret)
+        return NULL;
+    if(ret->GetMapId() != GetId())
+        return NULL;
+    if(ret->GetInstanceId() != GetInstanceId())
+        return NULL;
+    return ret;
+}
+
+DynamicObject*
+Map::GetDynamicObject(uint64 guid)
+{
+    DynamicObject * ret = ObjectAccessor::GetObjectInWorld(guid, (DynamicObject*)NULL);
+    if(!ret)
+        return NULL;
+    if(ret->GetMapId() != GetId())
+        return NULL;
+    if(ret->GetInstanceId() != GetInstanceId())
+        return NULL;
+    return ret;
 }

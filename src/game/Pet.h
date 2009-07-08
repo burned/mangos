@@ -79,11 +79,10 @@ enum PetSpellType
 
 struct PetSpell
 {
-    uint16 slotId;
-    uint16 active;
+    uint8 active;                                           // use instead enum (not good use *uint8* limited enum in case when value in enum not possitive in *int8*)
 
-    PetSpellState state : 16;
-    PetSpellType type   : 16;
+    PetSpellState state : 8;
+    PetSpellType type   : 8;
 };
 
 enum ActionFeedback
@@ -102,6 +101,9 @@ enum PetTalk
 
 enum PetNameInvalidReason
 {
+    // custom, not send
+    PET_NAME_SUCCESS                                        = 0,
+
     PET_NAME_INVALID                                        = 1,
     PET_NAME_NO_NAME                                        = 2,
     PET_NAME_TOO_SHORT                                      = 3,
@@ -117,7 +119,7 @@ enum PetNameInvalidReason
     PET_NAME_DECLENSION_DOESNT_MATCH_BASE_NAME              = 16
 };
 
-typedef UNORDERED_MAP<uint32, PetSpell*> PetSpellMap;
+typedef UNORDERED_MAP<uint32, PetSpell> PetSpellMap;
 typedef std::map<uint32,uint32> TeachSpellMap;
 typedef std::vector<uint32> AutoSpellList;
 
@@ -128,10 +130,12 @@ extern const uint32 LevelStartLoyalty[6];
 
 #define ACTIVE_SPELLS_MAX           4
 
-#define OWNER_MAX_DISTANCE 100
+#define OWNER_MAX_DISTANCE 100.0f
 
 #define PET_FOLLOW_DIST  1
 #define PET_FOLLOW_ANGLE (M_PI/2)
+
+class Player;
 
 class Pet : public Creature
 {
@@ -146,6 +150,7 @@ class Pet : public Creature
         void setPetType(PetType type) { m_petType = type; }
         bool isControlled() const { return getPetType()==SUMMON_PET || getPetType()==HUNTER_PET; }
         bool isTemporarySummoned() const { return m_duration > 0; }
+        bool IsPermanentPetFor(Player* owner);              // pet have tab in character windows and set UNIT_FIELD_PETNUMBER
 
         bool Create (uint32 guidlow, Map *map, uint32 Entry, uint32 pet_number);
         bool CreateBaseAtCreature(Creature* creature);
@@ -178,7 +183,8 @@ class Pet : public Creature
         void SetLoyaltyLevel(LoyaltyLevel level);
         void GivePetXP(uint32 xp);
         void GivePetLevel(uint32 level);
-        bool InitStatsForLevel(uint32 level);
+        void SynchronizeLevelWithOwner();
+        bool InitStatsForLevel(uint32 level, Unit* owner = NULL);
         bool HaveInDiet(ItemPrototype const* item) const;
         uint32 GetCurrentFoodBenefitLevel(uint32 itemlevel);
         void SetDuration(int32 dur) { m_duration = dur; }
@@ -214,10 +220,11 @@ class Pet : public Creature
         void _LoadSpells();
         void _SaveSpells();
 
-        bool addSpell(uint32 spell_id,uint16 active = ACT_DECIDE, PetSpellState state = PETSPELL_NEW, uint16 slot_id=0xffff, PetSpellType type = PETSPELL_NORMAL);
+        bool addSpell(uint32 spell_id,ActiveStates active = ACT_DECIDE, PetSpellState state = PETSPELL_NEW, PetSpellType type = PETSPELL_NORMAL);
         bool learnSpell(uint32 spell_id);
-        void removeSpell(uint32 spell_id);
-        bool _removeSpell(uint32 spell_id);
+        bool unlearnSpell(uint32 spell_id, bool learn_prev, bool clear_ab = true);
+        bool removeSpell(uint32 spell_id, bool learn_prev, bool clear_ab = true);
+        void CleanupActionBar();
 
         PetSpellMap     m_spells;
         TeachSpellMap   m_teachspells;
@@ -252,6 +259,7 @@ class Pet : public Creature
         int32   m_loyaltyPoints;
         int32   m_bonusdamage;
         uint64  m_auraUpdateMask;
+        bool    m_loading;
 
         DeclinedName *m_declinedname;
 

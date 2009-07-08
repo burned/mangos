@@ -21,9 +21,9 @@
 
 #include "Platform/Define.h"
 #include "Policies/ThreadingModel.h"
-#include "zthread/Lockable.h"
-#include "zthread/Mutex.h"
-#include "zthread/FairReadWriteLock.h"
+#include "ace/RW_Thread_Mutex.h"
+#include "ace/Thread_Mutex.h"
+
 #include "DBCStructure.h"
 #include "GridDefines.h"
 #include "Cell.h"
@@ -42,13 +42,8 @@ class InstanceData;
 class Group;
 class InstanceSave;
 
-namespace ZThread
-{
-    class Lockable;
-    class ReadWriteLock;
-}
 
-typedef ZThread::FairReadWriteLock GridRWLock;
+typedef ACE_RW_Thread_Mutex GridRWLock;
 
 template<class MUTEX, class LOCK_TYPE>
 struct RGuard
@@ -64,8 +59,8 @@ struct WGuard
     MaNGOS::GeneralLock<LOCK_TYPE> i_lock;
 };
 
-typedef RGuard<GridRWLock, ZThread::Lockable> GridReadGuard;
-typedef WGuard<GridRWLock, ZThread::Lockable> GridWriteGuard;
+typedef RGuard<GridRWLock, ACE_Thread_Mutex> GridReadGuard;
+typedef WGuard<GridRWLock, ACE_Thread_Mutex> GridWriteGuard;
 typedef MaNGOS::SingleThreaded<GridRWLock>::Lock NullGuard;
 
 //******************************************
@@ -245,7 +240,7 @@ typedef UNORDERED_MAP<Creature*, CreatureMover> CreatureMoveList;
 #define INVALID_HEIGHT       -100000.0f                     // for check, must be equal to VMAP_INVALID_HEIGHT, real value for unknown height is VMAP_INVALID_HEIGHT_VALUE
 #define MIN_UNLOAD_DELAY      1                             // immediate unload
 
-class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>, public MaNGOS::ObjectLevelLockable<Map, ZThread::Mutex>
+class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>, public MaNGOS::ObjectLevelLockable<Map, ACE_Thread_Mutex>
 {
     friend class MapReference;
     public:
@@ -317,8 +312,8 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>, public MaNGOS::Obj
         bool IsUnderWater(float x, float y, float z) const;
 
         static uint32 GetAreaIdByAreaFlag(uint16 areaflag,uint32 map_id);
-        static uint32 GetAreaId(uint16 areaflag,uint32 map_id);
-        static uint32 GetZoneId(uint16 areaflag,uint32 map_id);
+        static uint32 GetZoneIdByAreaFlag(uint16 areaflag,uint32 map_id);
+        static void GetZoneAndAreaIdByAreaFlag(uint32& zoneid, uint32& areaid, uint16 areaflag,uint32 map_id);
 
         uint32 GetAreaId(float x, float y, float z) const
         {
@@ -327,7 +322,12 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>, public MaNGOS::Obj
 
         uint32 GetZoneId(float x, float y, float z) const
         {
-            return GetZoneId(GetAreaFlag(x,y,z),i_id);
+            return GetZoneIdByAreaFlag(GetAreaFlag(x,y,z),i_id);
+        }
+
+        void GetZoneAndAreaId(uint32& zoneid, uint32& areaid, float x, float y, float z) const
+        {
+            GetZoneAndAreaIdByAreaFlag(zoneid,areaid,GetAreaFlag(x,y,z),i_id);
         }
 
         virtual void MoveAllCreaturesInMoveList();
@@ -396,10 +396,14 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>, public MaNGOS::Obj
         void RemoveFromActive(T* obj) { RemoveFromActiveHelper(obj); }
 
         void RemoveFromActive(Creature* obj);
+
+        Creature* GetCreature(uint64 guid);
+        GameObject* GetGameObject(uint64 guid);
+        DynamicObject* GetDynamicObject(uint64 guid);
     private:
         void LoadMapAndVMap(int gx, int gy);
         void LoadVMap(int gx, int gy);
-        void LoadMap(int gx,int gy);
+        void LoadMap(int gx, int gy, bool reload = false);
         GridMap *GetGrid(float x, float y);
 
         void SetTimer(uint32 t) { i_gridExpiry = t < MIN_GRID_DELAY ? MIN_GRID_DELAY : t; }
@@ -441,7 +445,7 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>, public MaNGOS::Obj
     protected:
         void SetUnloadReferenceLock(const GridPair &p, bool on) { getNGrid(p.x_coord, p.y_coord)->setUnloadReferenceLock(on); }
 
-        typedef MaNGOS::ObjectLevelLockable<Map, ZThread::Mutex>::Lock Guard;
+        typedef MaNGOS::ObjectLevelLockable<Map, ACE_Thread_Mutex>::Lock Guard;
 
         MapEntry const* i_mapEntry;
         uint8 i_spawnMode;

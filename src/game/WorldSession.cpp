@@ -34,10 +34,11 @@
 #include "World.h"
 #include "ObjectAccessor.h"
 #include "BattleGroundMgr.h"
+#include "MapManager.h"
 #include "SocialMgr.h"
 
 /// WorldSession constructor
-WorldSession::WorldSession(uint32 id, WorldSocket *sock, uint32 sec, uint8 expansion, time_t mute_time, LocaleConstant locale) :
+WorldSession::WorldSession(uint32 id, WorldSocket *sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale) :
 LookingForGroup_auto_join(false), LookingForGroup_auto_add(false), m_muteTime(mute_time),
 _player(NULL), m_Socket(sock),_security(sec), _accountId(id), m_expansion(expansion),
 m_sessionDbcLocale(sWorld.GetAvailableDbcLocale(locale)), m_sessionDbLocaleIndex(objmgr.GetIndexForLocale(locale)),
@@ -117,8 +118,8 @@ void WorldSession::SendPacket(WorldPacket const* packet)
     {
         uint64 minTime = uint64(cur_time - lastTime);
         uint64 fullTime = uint64(lastTime - firstTime);
-        sLog.outDetail("Send all time packets count: " I64FMTD " bytes: " I64FMTD " avr.count/sec: %f avr.bytes/sec: %f time: %u",sendPacketCount,sendPacketBytes,float(sendPacketCount)/fullTime,float(sendPacketBytes)/fullTime,uint32(fullTime));
-        sLog.outDetail("Send last min packets count: " I64FMTD " bytes: " I64FMTD " avr.count/sec: %f avr.bytes/sec: %f",sendLastPacketCount,sendLastPacketBytes,float(sendLastPacketCount)/minTime,float(sendLastPacketBytes)/minTime);
+        sLog.outDetail("Send all time packets count: " UI64FMTD " bytes: " UI64FMTD " avr.count/sec: %f avr.bytes/sec: %f time: %u",sendPacketCount,sendPacketBytes,float(sendPacketCount)/fullTime,float(sendPacketBytes)/fullTime,uint32(fullTime));
+        sLog.outDetail("Send last min packets count: " UI64FMTD " bytes: " UI64FMTD " avr.count/sec: %f avr.bytes/sec: %f",sendLastPacketCount,sendLastPacketBytes,float(sendLastPacketCount)/minTime,float(sendLastPacketBytes)/minTime);
 
         lastTime = cur_time;
         sendLastPacketCount = 1;
@@ -183,7 +184,7 @@ bool WorldSession::Update(uint32 /*diff*/)
                         (this->*opHandle.handler)(*packet);
                     // lag can cause STATUS_LOGGEDIN opcodes to arrive after the player started a transfer
                     break;
-                case STATUS_TRANSFER_PENDING:
+                case STATUS_TRANSFER:
                     if(!_player)
                         logUnexpectedOpcode(packet, "the player has not logged in yet");
                     else if(_player->IsInWorld())
@@ -307,7 +308,7 @@ void WorldSession::LogoutPlayer(bool Save)
         if(!_player->m_InstanceValid && !_player->isGameMaster())
             _player->TeleportTo(_player->m_homebindMapId, _player->m_homebindX, _player->m_homebindY, _player->m_homebindZ, _player->GetOrientation());
 
-        for (int i=0; i < PLAYER_MAX_BATTLEGROUND_QUEUES; i++)
+        for (int i=0; i < PLAYER_MAX_BATTLEGROUND_QUEUES; ++i)
         {
             if(int32 bgTypeId = _player->GetBattleGroundQueueId(i))
             {
@@ -344,12 +345,12 @@ void WorldSession::LogoutPlayer(bool Save)
         if(Save)
         {
             uint32 eslot;
-            for(int j = BUYBACK_SLOT_START; j < BUYBACK_SLOT_END; j++)
+            for(int j = BUYBACK_SLOT_START; j < BUYBACK_SLOT_END; ++j)
             {
                 eslot = j - BUYBACK_SLOT_START;
-                _player->SetUInt64Value(PLAYER_FIELD_VENDORBUYBACK_SLOT_1+eslot*2,0);
-                _player->SetUInt32Value(PLAYER_FIELD_BUYBACK_PRICE_1+eslot,0);
-                _player->SetUInt32Value(PLAYER_FIELD_BUYBACK_TIMESTAMP_1+eslot,0);
+                _player->SetUInt64Value(PLAYER_FIELD_VENDORBUYBACK_SLOT_1 + (eslot * 2), 0);
+                _player->SetUInt32Value(PLAYER_FIELD_BUYBACK_PRICE_1 + eslot, 0);
+                _player->SetUInt32Value(PLAYER_FIELD_BUYBACK_TIMESTAMP_1 + eslot, 0);
             }
             _player->SaveToDB();
         }
@@ -365,6 +366,14 @@ void WorldSession::LogoutPlayer(bool Save)
         if(_player->GetGroup() && !_player->GetGroup()->isRaidGroup() && m_Socket)
             _player->RemoveFromGroup();
 
+        ///- Send update to group
+        if(_player->GetGroup())
+            _player->GetGroup()->SendUpdate();
+
+        ///- Broadcast a logout message to the player's friends
+        sSocialMgr.SendFriendStatus(_player, FRIEND_OFFLINE, _player->GetGUIDLow(), true);
+        sSocialMgr.RemovePlayerSocial (_player->GetGUIDLow ());
+
         ///- Remove the player from the world
         // the player may not be in the world when logging out
         // e.g if he got disconnected during a transfer to another map
@@ -373,17 +382,9 @@ void WorldSession::LogoutPlayer(bool Save)
         // RemoveFromWorld does cleanup that requires the player to be in the accessor
         ObjectAccessor::Instance().RemoveObject(_player);
 
-        ///- Send update to group
-        if(_player->GetGroup())
-            _player->GetGroup()->SendUpdate();
-
-        ///- Broadcast a logout message to the player's friends
-        sSocialMgr.SendFriendStatus(_player, FRIEND_OFFLINE, _player->GetGUIDLow(), true);
-
         ///- Delete the player object
         _player->CleanupsBeforeDelete();                    // do some cleanup before deleting to prevent crash at crossreferences to already deleted data
 
-        sSocialMgr.RemovePlayerSocial (_player->GetGUIDLow ());
         delete _player;
         _player = NULL;
 
@@ -511,5 +512,53 @@ void WorldSession::SendAuthWaitQue(uint32 position)
         packet << uint8( AUTH_WAIT_QUEUE );
         packet << uint32 (position);
         SendPacket(&packet);
+    }
+}
+
+void WorldSession::ReadMovementInfo(WorldPacket &data, MovementInfo *mi)
+{
+    CHECK_PACKET_SIZE(data, 4+1+4+4+4+4+4);
+    data >> mi->flags;
+    data >> mi->unk1;
+    data >> mi->time;
+    data >> mi->x;
+    data >> mi->y;
+    data >> mi->z;
+    data >> mi->o;
+
+    if(mi->HasMovementFlag(MOVEMENTFLAG_ONTRANSPORT))
+    {
+        CHECK_PACKET_SIZE(data, data.rpos()+8+4+4+4+4+4);
+
+        data >> mi->t_guid;
+        data >> mi->t_x;
+        data >> mi->t_y;
+        data >> mi->t_z;
+        data >> mi->t_o;
+        data >> mi->t_time;
+    }
+
+    if(mi->HasMovementFlag(MovementFlags(MOVEMENTFLAG_SWIMMING | MOVEMENTFLAG_FLYING2)))
+    {
+        CHECK_PACKET_SIZE(data, data.rpos()+4);
+        data >> mi->s_pitch;
+    }
+
+    CHECK_PACKET_SIZE(data, data.rpos()+4);
+    data >> mi->fallTime;
+
+    if(mi->HasMovementFlag(MOVEMENTFLAG_JUMPING))
+    {
+        CHECK_PACKET_SIZE(data, data.rpos()+4+4+4+4);
+        data >> mi->j_unk;
+        data >> mi->j_sinAngle;
+        data >> mi->j_cosAngle;
+        data >> mi->j_xyspeed;
+    }
+
+    if(mi->HasMovementFlag(MOVEMENTFLAG_SPLINE))
+    {
+        CHECK_PACKET_SIZE(data, data.rpos()+4);
+        data >> mi->u_unk1;
     }
 }

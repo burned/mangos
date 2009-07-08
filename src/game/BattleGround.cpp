@@ -187,15 +187,15 @@ void BattleGround::Update(uint32 diff)
             for(std::map<uint64, std::vector<uint64> >::iterator itr = m_ReviveQueue.begin(); itr != m_ReviveQueue.end(); ++itr)
             {
                 Creature *sh = NULL;
-                for(std::vector<uint64>::iterator itr2 = (itr->second).begin(); itr2 != (itr->second).end(); ++itr2)
+                for(std::vector<uint64>::const_iterator itr2 = (itr->second).begin(); itr2 != (itr->second).end(); ++itr2)
                 {
                     Player *plr = objmgr.GetPlayer(*itr2);
                     if(!plr)
                         continue;
 
-                    if (!sh)
+                    if (!sh && plr->IsInWorld())
                     {
-                        sh = ObjectAccessor::GetCreature(*plr, itr->first);
+                        sh = plr->GetMap()->GetCreature(itr->first);
                         // only for visual effect
                         if (sh)
                             sh->CastSpell(sh, SPELL_SPIRIT_HEAL, true);   // Spirit Heal, effect 117
@@ -216,7 +216,7 @@ void BattleGround::Update(uint32 diff)
     }
     else if (m_LastResurrectTime > 500)    // Resurrect players only half a second later, to see spirit heal effect on NPC
     {
-        for(std::vector<uint64>::iterator itr = m_ResurrectQueue.begin(); itr != m_ResurrectQueue.end(); ++itr)
+        for(std::vector<uint64>::const_iterator itr = m_ResurrectQueue.begin(); itr != m_ResurrectQueue.end(); ++itr)
         {
             Player *plr = objmgr.GetPlayer(*itr);
             if(!plr)
@@ -281,25 +281,25 @@ void BattleGround::SetTeamStartLoc(uint32 TeamID, float X, float Y, float Z, flo
 
 void BattleGround::SendPacketToAll(WorldPacket *packet)
 {
-    for(std::map<uint64, BattleGroundPlayer>::iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
+    for(BattleGroundPlayerMap::const_iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
     {
         Player *plr = objmgr.GetPlayer(itr->first);
         if(plr)
             plr->GetSession()->SendPacket(packet);
         else
-            sLog.outError("BattleGround: Player " I64FMTD " not found!", itr->first);
+            sLog.outError("BattleGround: Player (GUID: %u) not found!", GUID_LOPART(itr->first));
     }
 }
 
 void BattleGround::SendPacketToTeam(uint32 TeamID, WorldPacket *packet, Player *sender, bool self)
 {
-    for(std::map<uint64, BattleGroundPlayer>::iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
+    for(BattleGroundPlayerMap::const_iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
     {
         Player *plr = objmgr.GetPlayer(itr->first);
 
         if(!plr)
         {
-            sLog.outError("BattleGround: Player " I64FMTD " not found!", itr->first);
+            sLog.outError("BattleGround: Player (GUID: %u) not found!", GUID_LOPART(itr->first));
             continue;
         }
 
@@ -325,13 +325,13 @@ void BattleGround::PlaySoundToTeam(uint32 SoundID, uint32 TeamID)
 {
     WorldPacket data;
 
-    for(std::map<uint64, BattleGroundPlayer>::iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
+    for(BattleGroundPlayerMap::const_iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
     {
         Player *plr = objmgr.GetPlayer(itr->first);
 
         if(!plr)
         {
-            sLog.outError("BattleGround: Player " I64FMTD " not found!", itr->first);
+            sLog.outError("BattleGround: Player (GUID: %u) not found!", GUID_LOPART(itr->first));
             continue;
         }
 
@@ -348,13 +348,13 @@ void BattleGround::PlaySoundToTeam(uint32 SoundID, uint32 TeamID)
 
 void BattleGround::CastSpellOnTeam(uint32 SpellID, uint32 TeamID)
 {
-    for(std::map<uint64, BattleGroundPlayer>::iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
+    for(BattleGroundPlayerMap::const_iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
     {
         Player *plr = objmgr.GetPlayer(itr->first);
 
         if(!plr)
         {
-            sLog.outError("BattleGround: Player " I64FMTD " not found!", itr->first);
+            sLog.outError("BattleGround: Player (GUID: %u) not found!", GUID_LOPART(itr->first));
             continue;
         }
 
@@ -368,13 +368,13 @@ void BattleGround::CastSpellOnTeam(uint32 SpellID, uint32 TeamID)
 
 void BattleGround::RewardHonorToTeam(uint32 Honor, uint32 TeamID)
 {
-    for(std::map<uint64, BattleGroundPlayer>::iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
+    for(BattleGroundPlayerMap::const_iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
     {
         Player *plr = objmgr.GetPlayer(itr->first);
 
         if(!plr)
         {
-            sLog.outError("BattleGround: Player " I64FMTD " not found!", itr->first);
+            sLog.outError("BattleGround: Player (GUID: %u) not found!", GUID_LOPART(itr->first));
             continue;
         }
 
@@ -393,13 +393,13 @@ void BattleGround::RewardReputationToTeam(uint32 faction_id, uint32 Reputation, 
     if(!factionEntry)
         return;
 
-    for(std::map<uint64, BattleGroundPlayer>::iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
+    for(BattleGroundPlayerMap::const_iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
     {
         Player *plr = objmgr.GetPlayer(itr->first);
 
         if(!plr)
         {
-            sLog.outError("BattleGround: Player " I64FMTD " not found!", itr->first);
+            sLog.outError("BattleGround: Player (GUID: %u) not found!", GUID_LOPART(itr->first));
             continue;
         }
 
@@ -510,7 +510,7 @@ void BattleGround::EndBattleGround(uint32 winner)
         Player *plr = objmgr.GetPlayer(itr->first);
         if(!plr)
         {
-            sLog.outError("BattleGround: Player " I64FMTD " not found!", itr->first);
+            sLog.outError("BattleGround: Player (GUID: %u) not found!", GUID_LOPART(itr->first));
             continue;
         }
 
@@ -542,12 +542,10 @@ void BattleGround::EndBattleGround(uint32 winner)
                 Source = plr;
             RewardMark(plr,ITEM_WINNER_COUNT);
             UpdatePlayerScore(plr, SCORE_BONUS_HONOR, 20);
-            RewardQuest(plr);
+            RewardQuestComplete(plr);
         }
         else
-        {
             RewardMark(plr,ITEM_LOSER_COUNT);
-        }
 
         plr->CombatStopWithPets(true);
 
@@ -600,10 +598,6 @@ uint32 BattleGround::GetBattlemasterEntry() const
 
 void BattleGround::RewardMark(Player *plr,uint32 count)
 {
-    // 'Inactive' this aura prevents the player from gaining honor points and battleground tokens
-    if(plr->GetDummyAura(SPELL_AURA_PLAYER_INACTIVE))
-        return;
-
     BattleGroundMarks mark;
     bool IsSpell;
     switch(GetTypeID())
@@ -637,23 +631,53 @@ void BattleGround::RewardMark(Player *plr,uint32 count)
             return;
     }
 
-    if(IsSpell)
-        plr->CastSpell(plr, mark, true);
-    else if ( objmgr.GetItemPrototype( mark ) )
+    if (IsSpell)
+        RewardSpellCast(plr,mark);
+    else
+        RewardItem(plr,mark,count);
+}
+
+void BattleGround::RewardSpellCast(Player *plr, uint32 spell_id)
+{
+    // 'Inactive' this aura prevents the player from gaining honor points and battleground tokens
+    if (plr->GetDummyAura(SPELL_AURA_PLAYER_INACTIVE))
+        return;
+
+    SpellEntry const *spellInfo = sSpellStore.LookupEntry(spell_id);
+    if(!spellInfo)
     {
-        ItemPosCountVec dest;
-        uint32 no_space_count = 0;
-        uint8 msg = plr->CanStoreNewItem( NULL_BAG, NULL_SLOT, dest, mark, count, &no_space_count );
-        if( msg != EQUIP_ERR_OK )                       // convert to possible store amount
-            count -= no_space_count;
-
-        if( count != 0 && !dest.empty())                // can add some
-            if(Item* item = plr->StoreNewItem( dest, mark, true, 0))
-                plr->SendNewItem(item,count,false,true);
-
-        if(no_space_count > 0)
-            SendRewardMarkByMail(plr,mark,no_space_count);
+        sLog.outError("Battleground reward casting spell %u not exist.",spell_id);
+        return;
     }
+
+    plr->CastSpell(plr, spellInfo, true);
+}
+
+void BattleGround::RewardItem(Player *plr, uint32 item_id, uint32 count)
+{
+    // 'Inactive' this aura prevents the player from gaining honor points and battleground tokens
+    if (plr->GetDummyAura(SPELL_AURA_PLAYER_INACTIVE))
+        return;
+
+    ItemPosCountVec dest;
+    uint32 no_space_count = 0;
+    uint8 msg = plr->CanStoreNewItem( NULL_BAG, NULL_SLOT, dest, item_id, count, &no_space_count );
+
+    if( msg == EQUIP_ERR_ITEM_NOT_FOUND)
+    {
+        sLog.outErrorDb("Battleground reward item (Entry %u) not exist in `item_template`.",item_id);
+        return;
+    }
+
+    if( msg != EQUIP_ERR_OK )                               // convert to possible store amount
+        count -= no_space_count;
+
+    if( count != 0 && !dest.empty())                        // can add some
+        if (Item* item = plr->StoreNewItem( dest, item_id, true, 0))
+            plr->SendNewItem(item,count,false,true);
+
+    if (no_space_count > 0)
+        SendRewardMarkByMail(plr,item_id,no_space_count);
 }
 
 void BattleGround::SendRewardMarkByMail(Player *plr,uint32 mark, uint32 count)
@@ -693,7 +717,7 @@ void BattleGround::SendRewardMarkByMail(Player *plr,uint32 mark, uint32 count)
     }
 }
 
-void BattleGround::RewardQuest(Player *plr)
+void BattleGround::RewardQuestComplete(Player *plr)
 {
     // 'Inactive' this aura prevents the player from gaining honor points and battleground tokens
     if(plr->GetDummyAura(SPELL_AURA_PLAYER_INACTIVE))
@@ -718,7 +742,7 @@ void BattleGround::RewardQuest(Player *plr)
             return;
     }
 
-    plr->CastSpell(plr, quest, true);
+    RewardSpellCast(plr, quest);
 }
 
 void BattleGround::BlockMovement(Player *plr)
@@ -1054,7 +1078,7 @@ bool BattleGround::HasFreeSlots() const
 void BattleGround::UpdatePlayerScore(Player *Source, uint32 type, uint32 value)
 {
     //this procedure is called from virtual function implemented in bg subclass
-    std::map<uint64, BattleGroundScore*>::iterator itr = m_PlayerScores.find(Source->GetGUID());
+    std::map<uint64, BattleGroundScore*>::const_iterator itr = m_PlayerScores.find(Source->GetGUID());
 
     if(itr == m_PlayerScores.end())                         // player not found...
         return;
@@ -1141,7 +1165,7 @@ bool BattleGround::AddObject(uint32 type, uint32 entry, float x, float y, float 
     // and when loading it (in go::LoadFromDB()), a new guid would be assigned to the object, and a new object would be created
     // so we must create it specific for this instance
     GameObject * go = new GameObject;
-    if(!go->Create(objmgr.GenerateLowGuid(HIGHGUID_GAMEOBJECT),entry, map,x,y,z,o,rotation0,rotation1,rotation2,rotation3,100,1))
+    if(!go->Create(objmgr.GenerateLowGuid(HIGHGUID_GAMEOBJECT),entry, map,x,y,z,o,rotation0,rotation1,rotation2,rotation3,100,GO_STATE_READY))
     {
         sLog.outErrorDb("Gameobject template %u not found in database! BattleGround not created!", entry);
         sLog.outError("Cannot create gameobject template %u! BattleGround not created!", entry);
@@ -1184,7 +1208,7 @@ void BattleGround::DoorClose(uint32 type)
     if(obj)
     {
         //if doors are open, close it
-        if( obj->getLootState() == GO_ACTIVATED && !obj->GetGoState() )
+        if (obj->getLootState() == GO_ACTIVATED && obj->GetGoState() != GO_STATE_READY)
         {
             //change state to allow door to be closed
             obj->SetLootState(GO_READY);
@@ -1259,7 +1283,8 @@ Creature* BattleGround::AddCreature(uint32 entry, uint32 type, uint32 teamval, f
 
     if(!pCreature->IsPositionValid())
     {
-        sLog.outError("ERROR: Creature (guidlow %d, entry %d) not added to battleground. Suggested coordinates isn't valid (X: %f Y: %f)",pCreature->GetGUIDLow(),pCreature->GetEntry(),pCreature->GetPositionX(),pCreature->GetPositionY());
+        sLog.outError("Creature (guidlow %d, entry %d) not added to battleground. Suggested coordinates isn't valid (X: %f Y: %f)",pCreature->GetGUIDLow(),pCreature->GetEntry(),pCreature->GetPositionX(),pCreature->GetPositionY());
+        delete pCreature;
         return NULL;
     }
 
@@ -1313,7 +1338,6 @@ bool BattleGround::DelCreature(uint32 type)
         sLog.outError("Can't find creature guid: %u",GUID_LOPART(m_BgCreatures[type]));
         return false;
     }
-    cr->CleanupsBeforeDelete();
     cr->AddObjectToRemoveList();
     m_BgCreatures[type] = 0;
     return true;
@@ -1455,7 +1479,7 @@ void BattleGround::HandleKillPlayer( Player *player, Player *killer )
         UpdatePlayerScore(killer, SCORE_HONORABLE_KILLS, 1);
         UpdatePlayerScore(killer, SCORE_KILLING_BLOWS, 1);
 
-        for(std::map<uint64, BattleGroundPlayer>::iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
+        for(BattleGroundPlayerMap::const_iterator itr = m_Players.begin(); itr != m_Players.end(); ++itr)
         {
             Player *plr = objmgr.GetPlayer(itr->first);
 

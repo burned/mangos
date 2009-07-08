@@ -33,15 +33,15 @@
 
 bool ChatHandler::HandleDebugSendSpellFailCommand(const char* args)
 {
-    if(!args)
+    if (!*args)
         return false;
 
     char* px = strtok((char*)args, " ");
-    if(!px)
+    if (!px)
         return false;
 
     uint8 failnum = (uint8)atoi(px);
-    if(failnum==0 && *px!='0')
+    if (failnum==0 && *px!='0')
         return false;
 
     char* p1 = strtok(NULL, " ");
@@ -50,13 +50,12 @@ bool ChatHandler::HandleDebugSendSpellFailCommand(const char* args)
     char* p2 = strtok(NULL, " ");
     uint8 failarg2 = p2 ? (uint8)atoi(p2) : 0;
 
-
     WorldPacket data(SMSG_CAST_FAILED, 5);
     data << uint32(133);
     data << uint8(failnum);
-    if(p1 || p2)
+    if (p1 || p2)
         data << uint32(failarg1);
-    if(p2)
+    if (p2)
         data << uint32(failarg2);
 
     m_session->SendPacket(&data);
@@ -66,20 +65,20 @@ bool ChatHandler::HandleDebugSendSpellFailCommand(const char* args)
 
 bool ChatHandler::HandleDebugSendPoiCommand(const char* args)
 {
+    if (!*args)
+        return false;
+
     Player *pPlayer = m_session->GetPlayer();
     Unit* target = getSelectedUnit();
-    if(!target)
+    if (!target)
     {
         SendSysMessage(LANG_SELECT_CHAR_OR_CREATURE);
         return true;
     }
 
-    if(!args)
-        return false;
-
     char* icon_text = strtok((char*)args, " ");
     char* flags_text = strtok(NULL, " ");
-    if(!icon_text || !flags_text)
+    if (!icon_text || !flags_text)
         return false;
 
     uint32 icon = atol(icon_text);
@@ -92,7 +91,7 @@ bool ChatHandler::HandleDebugSendPoiCommand(const char* args)
 
 bool ChatHandler::HandleDebugSendEquipErrorCommand(const char* args)
 {
-    if(!args)
+    if (!*args)
         return false;
 
     uint8 msg = atoi(args);
@@ -102,7 +101,7 @@ bool ChatHandler::HandleDebugSendEquipErrorCommand(const char* args)
 
 bool ChatHandler::HandleDebugSendSellErrorCommand(const char* args)
 {
-    if(!args)
+    if (!*args)
         return false;
 
     uint8 msg = atoi(args);
@@ -112,7 +111,7 @@ bool ChatHandler::HandleDebugSendSellErrorCommand(const char* args)
 
 bool ChatHandler::HandleDebugSendBuyErrorCommand(const char* args)
 {
-    if(!args)
+    if (!*args)
         return false;
 
     uint8 msg = atoi(args);
@@ -127,7 +126,7 @@ bool ChatHandler::HandleDebugSendOpcodeCommand(const char* /*args*/)
         unit = m_session->GetPlayer();
 
     std::ifstream ifs("opcode.txt");
-    if(ifs.bad())
+    if (ifs.bad())
         return false;
 
     uint32 opcode;
@@ -215,7 +214,7 @@ bool ChatHandler::HandleDebugPlayCinematicCommand(const char* args)
 {
     // USAGE: .debug play cinematic #cinematicid
     // #cinematicid - ID decimal number from CinemaicSequences.dbc (1st column)
-    if( !*args )
+    if (!*args)
     {
         SendSysMessage(LANG_BAD_VALUE);
         SetSentErrorMessage(true);
@@ -224,7 +223,7 @@ bool ChatHandler::HandleDebugPlayCinematicCommand(const char* args)
 
     uint32 dwId = atoi((char*)args);
 
-    if(!sCinematicSequencesStore.LookupEntry(dwId))
+    if (!sCinematicSequencesStore.LookupEntry(dwId))
     {
         PSendSysMessage(LANG_CINEMATIC_NOT_EXIST, dwId);
         SetSentErrorMessage(true);
@@ -240,7 +239,7 @@ bool ChatHandler::HandleDebugPlaySoundCommand(const char* args)
 {
     // USAGE: .debug playsound #soundid
     // #soundid - ID decimal number from SoundEntries.dbc (1st column)
-    if( !*args )
+    if (!*args)
     {
         SendSysMessage(LANG_BAD_VALUE);
         SetSentErrorMessage(true);
@@ -249,7 +248,7 @@ bool ChatHandler::HandleDebugPlaySoundCommand(const char* args)
 
     uint32 dwSoundId = atoi((char*)args);
 
-    if(!sSoundEntriesStore.LookupEntry(dwSoundId))
+    if (!sSoundEntriesStore.LookupEntry(dwSoundId))
     {
         PSendSysMessage(LANG_SOUND_NOT_EXIST, dwSoundId);
         SetSentErrorMessage(true);
@@ -257,14 +256,14 @@ bool ChatHandler::HandleDebugPlaySoundCommand(const char* args)
     }
 
     Unit* unit = getSelectedUnit();
-    if(!unit)
+    if (!unit)
     {
         SendSysMessage(LANG_SELECT_CHAR_OR_CREATURE);
         SetSentErrorMessage(true);
         return false;
     }
 
-    if(m_session->GetPlayer()->GetSelection())
+    if (m_session->GetPlayer()->GetSelection())
         unit->PlayDistanceSound(dwSoundId,m_session->GetPlayer());
     else
         unit->PlayDirectSound(dwSoundId,m_session->GetPlayer());
@@ -276,7 +275,7 @@ bool ChatHandler::HandleDebugPlaySoundCommand(const char* args)
 //Send notification in channel
 bool ChatHandler::HandleDebugSendChannelNotifyCommand(const char* args)
 {
-    if(!args)
+    if (!*args)
         return false;
 
     const char *name = "test";
@@ -294,7 +293,7 @@ bool ChatHandler::HandleDebugSendChannelNotifyCommand(const char* args)
 //Send notification in chat
 bool ChatHandler::HandleDebugSendChatMsgCommand(const char* args)
 {
-    if(!args)
+    if (!*args)
         return false;
 
     const char *msg = "testtest";
@@ -315,7 +314,7 @@ bool ChatHandler::HandleDebugSendQuestPartyMsgCommand(const char* args)
 bool ChatHandler::HandleDebugGetLootRecipient(const char* /*args*/)
 {
     Creature* target = getSelectedCreature();
-    if(!target)
+    if (!target)
         return false;
 
     PSendSysMessage("loot recipient: %s", target->hasLootRecipient()?(target->GetLootRecipient()?target->GetLootRecipient()->GetName():"offline"):"no loot recipient");
@@ -331,7 +330,7 @@ bool ChatHandler::HandleDebugSendQuestInvalidMsgCommand(const char* args)
 
 bool ChatHandler::HandleDebugGetItemState(const char* args)
 {
-    if (!args)
+    if (!*args)
         return false;
 
     std::string state_str = args;
@@ -353,7 +352,7 @@ bool ChatHandler::HandleDebugGetItemState(const char* args)
     {
         state_str = "The player has the following " + state_str + " items: ";
         SendSysMessage(state_str.c_str());
-        for (uint8 i = PLAYER_SLOT_START; i < PLAYER_SLOT_END; i++)
+        for (uint8 i = PLAYER_SLOT_START; i < PLAYER_SLOT_END; ++i)
         {
             if(i >= BUYBACK_SLOT_START && i < BUYBACK_SLOT_END)
                 continue;
@@ -370,9 +369,9 @@ bool ChatHandler::HandleDebugGetItemState(const char* args)
                 Bag *bag = (Bag*)item;
                 for (uint8 j = 0; j < bag->GetBagSize(); ++j)
                 {
-                    Item* item = bag->GetItemByPos(j);
-                    if (item && item->GetState() == state)
-                        PSendSysMessage("bag: 255 slot: %d guid: %d owner: %d", item->GetSlot(), item->GetGUIDLow(), GUID_LOPART(item->GetOwnerGUID()));
+                    Item* item2 = bag->GetItemByPos(j);
+                    if (item2 && item2->GetState() == state)
+                        PSendSysMessage("bag: 255 slot: %d guid: %d owner: %d", item2->GetSlot(), item2->GetGUIDLow(), GUID_LOPART(item2->GetOwnerGUID()));
                 }
             }
         }
@@ -381,7 +380,7 @@ bool ChatHandler::HandleDebugGetItemState(const char* args)
     if (list_queue)
     {
         std::vector<Item *> &updateQueue = player->GetItemUpdateQueue();
-        for(size_t i = 0; i < updateQueue.size(); i++)
+        for(size_t i = 0; i < updateQueue.size(); ++i)
         {
             Item *item = updateQueue[i];
             if(!item) continue;
@@ -408,7 +407,7 @@ bool ChatHandler::HandleDebugGetItemState(const char* args)
     {
         bool error = false;
         std::vector<Item *> &updateQueue = player->GetItemUpdateQueue();
-        for (uint8 i = PLAYER_SLOT_START; i < PLAYER_SLOT_END; i++)
+        for (uint8 i = PLAYER_SLOT_START; i < PLAYER_SLOT_END; ++i)
         {
             if(i >= BUYBACK_SLOT_START && i < BUYBACK_SLOT_END)
                 continue;
@@ -466,65 +465,65 @@ bool ChatHandler::HandleDebugGetItemState(const char* args)
                 Bag *bag = (Bag*)item;
                 for (uint8 j = 0; j < bag->GetBagSize(); ++j)
                 {
-                    Item* item = bag->GetItemByPos(j);
-                    if (!item) continue;
+                    Item* item2 = bag->GetItemByPos(j);
+                    if (!item2) continue;
 
-                    if (item->GetSlot() != j)
+                    if (item2->GetSlot() != j)
                     {
-                        PSendSysMessage("the item in bag %d slot %d, guid %d has an incorrect slot value: %d", bag->GetSlot(), j, item->GetGUIDLow(), item->GetSlot());
+                        PSendSysMessage("the item in bag %d slot %d, guid %d has an incorrect slot value: %d", bag->GetSlot(), j, item2->GetGUIDLow(), item2->GetSlot());
                         error = true; continue;
                     }
 
-                    if (item->GetOwnerGUID() != player->GetGUID())
+                    if (item2->GetOwnerGUID() != player->GetGUID())
                     {
-                        PSendSysMessage("for the item in bag %d at slot %d and itemguid %d, owner's guid (%d) and player's guid (%d) don't match!", bag->GetSlot(), item->GetSlot(), item->GetGUIDLow(), GUID_LOPART(item->GetOwnerGUID()), player->GetGUIDLow());
+                        PSendSysMessage("for the item in bag %d at slot %d and itemguid %d, owner's guid (%d) and player's guid (%d) don't match!", bag->GetSlot(), item2->GetSlot(), item2->GetGUIDLow(), GUID_LOPART(item2->GetOwnerGUID()), player->GetGUIDLow());
                         error = true; continue;
                     }
 
-                    Bag *container = item->GetContainer();
+                    Bag *container = item2->GetContainer();
                     if (!container)
                     {
-                        PSendSysMessage("the item in bag %d at slot %d with guid %d has no container!", bag->GetSlot(), item->GetSlot(), item->GetGUIDLow());
+                        PSendSysMessage("the item in bag %d at slot %d with guid %d has no container!", bag->GetSlot(), item2->GetSlot(), item2->GetGUIDLow());
                         error = true; continue;
                     }
 
                     if (container != bag)
                     {
-                        PSendSysMessage("the item in bag %d at slot %d with guid %d has a different container(slot %d guid %d)!", bag->GetSlot(), item->GetSlot(), item->GetGUIDLow(), container->GetSlot(), container->GetGUIDLow());
+                        PSendSysMessage("the item in bag %d at slot %d with guid %d has a different container(slot %d guid %d)!", bag->GetSlot(), item2->GetSlot(), item2->GetGUIDLow(), container->GetSlot(), container->GetGUIDLow());
                         error = true; continue;
                     }
 
-                    if (item->IsInUpdateQueue())
+                    if (item2->IsInUpdateQueue())
                     {
-                        uint16 qp = item->GetQueuePos();
+                        uint16 qp = item2->GetQueuePos();
                         if (qp > updateQueue.size())
                         {
-                            PSendSysMessage("item in bag: %d at slot: %d guid: %d has a queuepos (%d) larger than the update queue size! ", bag->GetSlot(), item->GetSlot(), item->GetGUIDLow(), qp);
+                            PSendSysMessage("item in bag: %d at slot: %d guid: %d has a queuepos (%d) larger than the update queue size! ", bag->GetSlot(), item2->GetSlot(), item2->GetGUIDLow(), qp);
                             error = true; continue;
                         }
 
                         if (updateQueue[qp] == NULL)
                         {
-                            PSendSysMessage("item in bag: %d at slot: %d guid: %d has a queuepos (%d) that points to NULL in the queue!", bag->GetSlot(), item->GetSlot(), item->GetGUIDLow(), qp);
+                            PSendSysMessage("item in bag: %d at slot: %d guid: %d has a queuepos (%d) that points to NULL in the queue!", bag->GetSlot(), item2->GetSlot(), item2->GetGUIDLow(), qp);
                             error = true; continue;
                         }
 
-                        if (updateQueue[qp] != item)
+                        if (updateQueue[qp] != item2)
                         {
-                            PSendSysMessage("item in bag: %d at slot: %d guid: %d has has a queuepos (%d) that points to another item in the queue (bag: %d, slot: %d, guid: %d)", bag->GetSlot(), item->GetSlot(), item->GetGUIDLow(), qp, updateQueue[qp]->GetBagSlot(), updateQueue[qp]->GetSlot(), updateQueue[qp]->GetGUIDLow());
+                            PSendSysMessage("item in bag: %d at slot: %d guid: %d has has a queuepos (%d) that points to another item in the queue (bag: %d, slot: %d, guid: %d)", bag->GetSlot(), item2->GetSlot(), item2->GetGUIDLow(), qp, updateQueue[qp]->GetBagSlot(), updateQueue[qp]->GetSlot(), updateQueue[qp]->GetGUIDLow());
                             error = true; continue;
                         }
                     }
-                    else if (item->GetState() != ITEM_UNCHANGED)
+                    else if (item2->GetState() != ITEM_UNCHANGED)
                     {
-                        PSendSysMessage("item in bag: %d at slot: %d guid: %d is not in queue but should be (state: %d)!", bag->GetSlot(), item->GetSlot(), item->GetGUIDLow(), item->GetState());
+                        PSendSysMessage("item in bag: %d at slot: %d guid: %d is not in queue but should be (state: %d)!", bag->GetSlot(), item2->GetSlot(), item2->GetGUIDLow(), item2->GetState());
                         error = true; continue;
                     }
                 }
             }
         }
 
-        for(size_t i = 0; i < updateQueue.size(); i++)
+        for(size_t i = 0; i < updateQueue.size(); ++i)
         {
             Item *item = updateQueue[i];
             if(!item) continue;
@@ -577,7 +576,7 @@ bool ChatHandler::HandleDebugArenaCommand(const char * /*args*/)
 
 bool ChatHandler::HandleDebugSetItemFlagCommand(const char* args)
 {
-    if(!args)
+    if (!*args)
         return false;
 
     char* e = strtok((char*)args, " ");
@@ -591,7 +590,7 @@ bool ChatHandler::HandleDebugSetItemFlagCommand(const char* args)
 
     Item *i = m_session->GetPlayer()->GetItemByGuid(MAKE_NEW_GUID(guid, 0, HIGHGUID_ITEM));
 
-    if(!i)
+    if (!i)
         return false;
 
     i->SetUInt32Value(ITEM_FIELD_FLAGS, flag);
@@ -607,5 +606,35 @@ bool ChatHandler::HandleDebugAnimCommand(const char* args)
 
     uint32 anim_id = atoi((char*)args);
     m_session->GetPlayer()->HandleEmoteCommand(anim_id);
+    return true;
+}
+
+bool ChatHandler::HandleDebugSetAuraStateCommand(const char* args)
+{
+    if (!*args)
+    {
+        SendSysMessage(LANG_BAD_VALUE);
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    Unit* unit = getSelectedUnit();
+    if (!unit)
+    {
+        SendSysMessage(LANG_SELECT_CHAR_OR_CREATURE);
+        SetSentErrorMessage(true);
+        return false;
+    }
+
+    int32 state = atoi((char*)args);
+    if (!state)
+    {
+        // reset all states
+        for(int i = 1; i <= 32; ++i)
+            unit->ModifyAuraState(AuraState(i),false);
+        return true;
+    }
+
+    unit->ModifyAuraState(AuraState(abs(state)),state > 0);
     return true;
 }

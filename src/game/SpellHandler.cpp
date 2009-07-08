@@ -112,8 +112,32 @@ void WorldSession::HandleUseItemOpcode(WorldPacket& recvPacket)
     }
 
     SpellCastTargets targets;
-    if(!targets.read(&recvPacket, pUser))
+    if (!targets.read(&recvPacket, pUser))
         return;
+
+    targets.Update(pUser);
+
+    if (!pItem->IsTargetValidForItemUse(targets.getUnitTarget()))
+    {
+        // free gray item after use fail
+        pUser->SendEquipError(EQUIP_ERR_NONE, pItem, NULL);
+
+        // search spell for spell error
+        uint32 spellid = 0;
+        for(int i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+        {
+            if( proto->Spells[i].SpellTrigger == ITEM_SPELLTRIGGER_ON_USE || proto->Spells[i].SpellTrigger == ITEM_SPELLTRIGGER_ON_NO_DELAY_USE)
+            {
+                spellid = proto->Spells[i].SpellId;
+                break;
+            }
+        }
+
+        // send spell error
+        if (SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellid))
+            Spell::SendCastResult(_player,spellInfo,cast_count,SPELL_FAILED_BAD_TARGETS);
+        return;
+    }
 
     //Note: If script stop casting it must send appropriate data to client to prevent stuck item in gray state.
     if(!Script->ItemUse(pUser,pItem,targets))
@@ -263,8 +287,8 @@ void WorldSession::HandleGameObjectUseOpcode( WorldPacket & recv_data )
     recv_data >> guid;
 
     sLog.outDebug( "WORLD: Recvd CMSG_GAMEOBJ_USE Message [guid=%u]", GUID_LOPART(guid));
-    GameObject *obj = ObjectAccessor::GetGameObject(*_player, guid);
 
+    GameObject *obj = GetPlayer()->GetMap()->GetGameObject(guid);
     if(!obj)
         return;
 
@@ -429,7 +453,7 @@ void WorldSession::HandleCancelChanneling( WorldPacket & /*recv_data */)
     */
 }
 
-void WorldSession::HandleTotemDestroy( WorldPacket& recvPacket)
+void WorldSession::HandleTotemDestroyed( WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket, 1);
 
@@ -443,7 +467,7 @@ void WorldSession::HandleTotemDestroy( WorldPacket& recvPacket)
     if(!_player->m_TotemSlot[slotId])
         return;
 
-    Creature* totem = ObjectAccessor::GetCreature(*_player,_player->m_TotemSlot[slotId]);
+    Creature* totem = GetPlayer()->GetMap()->GetCreature(_player->m_TotemSlot[slotId]);
     if(totem && totem->isTotem())
         ((Totem*)totem)->UnSummon();
 }

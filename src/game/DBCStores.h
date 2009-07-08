@@ -74,9 +74,11 @@ extern DBCStorage <CreatureFamilyEntry>          sCreatureFamilyStore;
 extern DBCStorage <CreatureSpellDataEntry>       sCreatureSpellDataStore;
 extern DBCStorage <DurabilityCostsEntry>         sDurabilityCostsStore;
 extern DBCStorage <DurabilityQualityEntry>       sDurabilityQualityStore;
+extern DBCStorage <EmotesEntry>                  sEmotesStore;
 extern DBCStorage <EmotesTextEntry>              sEmotesTextStore;
 extern DBCStorage <FactionEntry>                 sFactionStore;
 extern DBCStorage <FactionTemplateEntry>         sFactionTemplateStore;
+extern DBCStorage <GameObjectDisplayInfoEntry>   sGameObjectDisplayInfoStore;
 extern DBCStorage <GemPropertiesEntry>           sGemPropertiesStore;
 
 extern DBCStorage <GtCombatRatingsEntry>         sGtCombatRatingsStore;
@@ -115,6 +117,7 @@ extern DBCStorage <SpellRangeEntry>              sSpellRangeStore;
 extern DBCStorage <SpellShapeshiftEntry>         sSpellShapeshiftStore;
 extern DBCStorage <SpellEntry>                   sSpellStore;
 extern DBCStorage <StableSlotPricesEntry>        sStableSlotPricesStore;
+//extern DBCStorage <SummonPropertiesEntry>        sSummonPropertiesStore;
 extern DBCStorage <TalentEntry>                  sTalentStore;
 extern DBCStorage <TalentTabEntry>               sTalentTabStore;
 extern DBCStorage <TaxiNodesEntry>               sTaxiNodesStore;
@@ -124,6 +127,7 @@ extern TaxiPathSetBySource                       sTaxiPathSetBySource;
 extern TaxiPathNodesByPath                       sTaxiPathNodesByPath;
 extern DBCStorage <TotemCategoryEntry>           sTotemCategoryStore;
 //extern DBCStorage <WorldMapAreaEntry>           sWorldMapAreaStore; -- use Zone2MapCoordinates and Map2ZoneCoordinates
+//extern DBCStorage <WorldMapOverlayEntry>         sWorldMapOverlayStore; -- not used currently
 extern DBCStorage <WorldSafeLocsEntry>           sWorldSafeLocsStore;
 
 void LoadDBCStores(const std::string& dataPath);
@@ -135,4 +139,6 @@ MANGOS_DLL_SPEC DBCStorage <SpellRangeEntry>            const* GetSpellRangeStor
 MANGOS_DLL_SPEC DBCStorage <FactionEntry>               const* GetFactionStore();
 MANGOS_DLL_SPEC DBCStorage <ItemEntry>                  const* GetItemDisplayStore();
 MANGOS_DLL_SPEC DBCStorage <CreatureDisplayInfoEntry>   const* GetCreatureDisplayStore();
+MANGOS_DLL_SPEC DBCStorage <EmotesEntry>                const* GetEmotesStore();
+MANGOS_DLL_SPEC DBCStorage <EmotesTextEntry>            const* GetEmotesTextStore();
 #endif

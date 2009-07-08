@@ -199,7 +199,7 @@ void WorldSession::HandleAutoEquipItemOpcode( WorldPacket & recv_data )
 
         // check dest->src move possibility
         ItemPosCountVec sSrc;
-        uint16 eSrc;
+        uint16 eSrc = 0;
         if( _player->IsInventoryPos( src ) )
         {
             msg = _player->CanStoreItem( srcbag, srcslot, sSrc, pDstItem, true );
@@ -512,7 +512,7 @@ void WorldSession::HandleSellItemOpcode( WorldPacket & recv_data )
     if(!itemguid)
         return;
 
-    Creature *pCreature = ObjectAccessor::GetNPCIfCanInteractWith(*_player, vendorguid,UNIT_NPC_FLAG_VENDOR);
+    Creature *pCreature = GetPlayer()->GetNPCIfCanInteractWith(vendorguid,UNIT_NPC_FLAG_VENDOR);
     if (!pCreature)
     {
         sLog.outDebug( "WORLD: HandleSellItemOpcode - Unit (GUID: %u) not found or you can't interact with him.", uint32(GUID_LOPART(vendorguid)) );
@@ -617,7 +617,7 @@ void WorldSession::HandleBuybackItem(WorldPacket & recv_data)
 
     recv_data >> vendorguid >> slot;
 
-    Creature *pCreature = ObjectAccessor::GetNPCIfCanInteractWith(*_player, vendorguid,UNIT_NPC_FLAG_VENDOR);
+    Creature *pCreature = GetPlayer()->GetNPCIfCanInteractWith(vendorguid,UNIT_NPC_FLAG_VENDOR);
     if (!pCreature)
     {
         sLog.outDebug( "WORLD: HandleBuybackItem - Unit (GUID: %u) not found or you can't interact with him.", uint32(GUID_LOPART(vendorguid)) );
@@ -663,11 +663,35 @@ void WorldSession::HandleBuyItemInSlotOpcode( WorldPacket & recv_data )
     sLog.outDebug(  "WORLD: Received CMSG_BUY_ITEM_IN_SLOT" );
     uint64 vendorguid, bagguid;
     uint32 item;
-    uint8 slot, count;
+    uint8 bagslot, count;
 
-    recv_data >> vendorguid >> item >> bagguid >> slot >> count;
+    recv_data >> vendorguid >> item >> bagguid >> bagslot >> count;
 
-    GetPlayer()->BuyItemFromVendor(vendorguid,item,count,bagguid,slot);
+    uint8 bag = NULL_BAG;                                   // init for case invalid bagGUID
+
+    // find bag slot by bag guid
+    if (bagguid == _player->GetGUID())
+        bag = INVENTORY_SLOT_BAG_0;
+    else
+    {
+        for (int i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END;++i)
+        {
+            if (Bag *pBag = (Bag*)_player->GetItemByPos(INVENTORY_SLOT_BAG_0,i))
+            {
+                if (bagguid == pBag->GetGUID())
+                {
+                    bag = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    // bag not found, cheating?
+    if (bag == NULL_BAG)
+        return;
+
+    GetPlayer()->BuyItemFromVendor(vendorguid,item,count,bag,bagslot);
 }
 
 void WorldSession::HandleBuyItemOpcode( WorldPacket & recv_data )
@@ -704,7 +728,7 @@ void WorldSession::SendListInventory( uint64 vendorguid )
 {
     sLog.outDebug(  "WORLD: Sent SMSG_LIST_INVENTORY" );
 
-    Creature *pCreature = ObjectAccessor::GetNPCIfCanInteractWith(*_player, vendorguid,UNIT_NPC_FLAG_VENDOR);
+    Creature *pCreature = GetPlayer()->GetNPCIfCanInteractWith(vendorguid,UNIT_NPC_FLAG_VENDOR);
     if (!pCreature)
     {
         sLog.outDebug( "WORLD: SendListInventory - Unit (GUID: %u) not found or you can't interact with him.", uint32(GUID_LOPART(vendorguid)) );
@@ -831,14 +855,14 @@ void WorldSession::HandleBuyBankSlotOpcode(WorldPacket& recvPacket)
     recvPacket >> guid;
 
     // cheating protection
-    Creature *pCreature = ObjectAccessor::GetNPCIfCanInteractWith(*_player, guid, UNIT_NPC_FLAG_BANKER);
+    Creature *pCreature = GetPlayer()->GetNPCIfCanInteractWith(guid, UNIT_NPC_FLAG_BANKER);
     if(!pCreature)
     {
         sLog.outDebug( "WORLD: HandleBuyBankSlotOpcode - Unit (GUID: %u) not found or you can't interact with him.", uint32(GUID_LOPART(guid)) );
         return;
     }
 
-    uint32 slot = _player->GetByteValue(PLAYER_BYTES_2, 2);
+    uint32 slot = _player->GetBankBagSlotCount();
 
     // next slot
     ++slot;
@@ -855,7 +879,7 @@ void WorldSession::HandleBuyBankSlotOpcode(WorldPacket& recvPacket)
     if (_player->GetMoney() < price)
         return;
 
-    _player->SetByteValue(PLAYER_BYTES_2, 2, slot);
+    _player->SetBankBagSlotCount(slot);
     _player->ModifyMoney(-int32(price));
 }
 
@@ -1002,7 +1026,13 @@ void WorldSession::HandleItemNameQueryOpcode(WorldPacket & recv_data)
         return;
     }
     else
-        sLog.outDebug("WORLD: CMSG_ITEM_NAME_QUERY for item %u failed (unknown item)", itemid);
+    {
+        // listed in dbc or not expected to exist unknown item
+        if(sItemStore.LookupEntry(itemid))
+            sLog.outErrorDb("WORLD: CMSG_ITEM_NAME_QUERY for item %u failed (item listed in Item.dbc but not exist in DB)", itemid);
+        else
+            sLog.outError("WORLD: CMSG_ITEM_NAME_QUERY for item %u failed (unknown item, not listed in Item.dbc)", itemid);
+    }
 }
 
 void WorldSession::HandleWrapItemOpcode(WorldPacket& recv_data)
@@ -1181,41 +1211,50 @@ void WorldSession::HandleSocketOpcode(WorldPacket& recv_data)
     // check unique-equipped conditions
     for(int i = 0; i < MAX_GEM_SOCKETS; ++i)
     {
-        if (Gems[i] && (Gems[i]->GetProto()->Flags & ITEM_FLAGS_UNIQUE_EQUIPPED))
+        if(!Gems[i])
+            continue;
+
+        // continue check for case when attempt add 2 similar unique equipped gems in one item.
+        ItemPrototype const* iGemProto = Gems[i]->GetProto();
+
+        // unique item (for new and already placed bit removed enchantments
+        if (iGemProto->Flags & ITEM_FLAGS_UNIQUE_EQUIPPED)
         {
-            // for equipped item check all equipment for duplicate equipped gems
-            if(itemTarget->IsEquipped())
-            {
-                if(GetPlayer()->GetItemOrItemWithGemEquipped(Gems[i]->GetEntry()))
-                {
-                    _player->SendEquipError( EQUIP_ERR_ITEM_UNIQUE_EQUIPABLE, itemTarget, NULL );
-                    return;
-                }
-            }
-
-            // continue check for case when attempt add 2 similar unique equipped gems in one item.
             for (int j = 0; j < MAX_GEM_SOCKETS; ++j)
             {
-                if ((i != j) && (Gems[j]) && (Gems[i]->GetProto()->ItemId == Gems[j]->GetProto()->ItemId))
-                {
-                    _player->SendEquipError( EQUIP_ERR_ITEM_UNIQUE_EQUIPPABLE_SOCKETED, itemTarget, NULL );
-                    return;
-                }
-            }
-            for (int j = 0; j < MAX_GEM_SOCKETS; ++j)
-            {
-                if (OldEnchants[j])
-                {
-                    SpellItemEnchantmentEntry const* enchantEntry = sSpellItemEnchantmentStore.LookupEntry(OldEnchants[j]);
-                    if(!enchantEntry)
-                        continue;
+                if(i==j)                                    // skip self
+                    continue;
 
-                    if ((enchantEntry->GemID == Gems[i]->GetProto()->ItemId) && (i != j))
+                if (Gems[j])
+                {
+                    if (iGemProto->ItemId == Gems[j]->GetEntry())
                     {
                         _player->SendEquipError( EQUIP_ERR_ITEM_UNIQUE_EQUIPPABLE_SOCKETED, itemTarget, NULL );
                         return;
                     }
                 }
+                else if(OldEnchants[j])
+                {
+                    if(SpellItemEnchantmentEntry const* enchantEntry = sSpellItemEnchantmentStore.LookupEntry(OldEnchants[j]))
+                    {
+                        if (iGemProto->ItemId == enchantEntry->GemID)
+                        {
+                            _player->SendEquipError( EQUIP_ERR_ITEM_UNIQUE_EQUIPPABLE_SOCKETED, itemTarget, NULL );
+                            return;
+                        }
+                    }
+                }
+
+            }
+        }
+
+        // for equipped item check all equipment for duplicate equipped gems
+        if(itemTarget->IsEquipped())
+        {
+            if(uint8 res = _player->CanEquipUniqueItem(Gems[i],slot))
+            {
+                _player->SendEquipError( res, itemTarget, NULL );
+                return;
             }
         }
     }
@@ -1254,7 +1293,7 @@ void WorldSession::HandleSocketOpcode(WorldPacket& recv_data)
     _player->ToggleMetaGemsActive(slot, true);              //turn on all metagems (except for target item)
 }
 
-void WorldSession::HandleCancelTempItemEnchantmentOpcode(WorldPacket& recv_data)
+void WorldSession::HandleCancelTempEnchantmentOpcode(WorldPacket& recv_data)
 {
     sLog.outDebug("WORLD: CMSG_CANCEL_TEMP_ENCHANTMENT");
 

@@ -26,10 +26,34 @@ pkgdatadir = $(datadir)/mangos/sql/updates/before_upgrade_to_0.13
 #  Install basic SQL files to datadir
 pkgdata_DATA = \
 	020_7643_01_mangos_db_version.sql \
+	029_7393_01_mangos_game_event.sql \
+	032_7059_01_characters.sql \
+	035_7855_01_mangos_pools.sql \
+	039_7896_01_mangos_creature_template.sql \
+	040_7902_01_mangos_pool.sql \
+	041_7932_01_characters_character_pet.sql \
+	043_7945_01_mangos_quest_template.sql \
+	045_8098_01_characters_character_action.sql \
+	045_8098_02_mangos_playercreateinfo_action.sql \
+	045_8098_03_characters_character_pet.sql \
+	045_8098_04_characters_pet_spell.sql \
+	048_7382_01_mangos_creature_template.sql \
 	README
 
 ## Additional files to include when running 'make dist'
 #  SQL update files, to upgrade database schema from older revisions
 EXTRA_DIST = \
 	020_7643_01_mangos_db_version.sql \
+	029_7393_01_mangos_game_event.sql \
+	032_7059_01_characters.sql \
+	035_7855_01_mangos_pools.sql \
+	039_7896_01_mangos_creature_template.sql \
+	040_7902_01_mangos_pool.sql \
+	041_7932_01_characters_character_pet.sql \
+	043_7945_01_mangos_quest_template.sql \
+	045_8098_01_characters_character_action.sql \
+	045_8098_02_mangos_playercreateinfo_action.sql \
+	045_8098_03_characters_character_pet.sql \
+	045_8098_04_characters_pet_spell.sql \
+	048_7382_01_mangos_creature_template.sql \
 	README

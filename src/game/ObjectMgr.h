@@ -126,10 +126,12 @@ typedef UNORDERED_MAP<uint64/*(instance,guid) pair*/,time_t> RespawnTimes;
 
 
 // mangos string ranges
-#define MIN_MANGOS_STRING_ID    1
-#define MAX_MANGOS_STRING_ID    2000000000
-#define MIN_DB_SCRIPT_STRING_ID MAX_MANGOS_STRING_ID
-#define MAX_DB_SCRIPT_STRING_ID 2000010000
+#define MIN_MANGOS_STRING_ID           1                    // 'mangos_string'
+#define MAX_MANGOS_STRING_ID           2000000000
+#define MIN_DB_SCRIPT_STRING_ID        MAX_MANGOS_STRING_ID // 'db_script_string'
+#define MAX_DB_SCRIPT_STRING_ID        2000010000
+#define MIN_CREATURE_AI_TEXT_STRING_ID (-1)                 // 'creature_ai_texts'
+#define MAX_CREATURE_AI_TEXT_STRING_ID (-1000000)
 
 struct MangosStringLocale
 {
@@ -144,10 +146,12 @@ typedef UNORDERED_MAP<uint32,ItemLocale> ItemLocaleMap;
 typedef UNORDERED_MAP<uint32,QuestLocale> QuestLocaleMap;
 typedef UNORDERED_MAP<uint32,NpcTextLocale> NpcTextLocaleMap;
 typedef UNORDERED_MAP<uint32,PageTextLocale> PageTextLocaleMap;
-typedef UNORDERED_MAP<uint32,MangosStringLocale> MangosStringLocaleMap;
+typedef UNORDERED_MAP<int32,MangosStringLocale> MangosStringLocaleMap;
 typedef UNORDERED_MAP<uint32,NpcOptionLocale> NpcOptionLocaleMap;
 
 typedef std::multimap<uint32,uint32> QuestRelations;
+typedef std::multimap<uint32,ItemRequiredTarget> ItemRequiredTargetMap;
+typedef std::pair<ItemRequiredTargetMap::const_iterator, ItemRequiredTargetMap::const_iterator>  ItemRequiredTargetMapBounds;
 
 struct PetLevelInfo
 {
@@ -252,8 +256,10 @@ enum SkillRangeType
 
 SkillRangeType GetSkillRangeType(SkillLineEntry const *pSkill, bool racial);
 
-#define MAX_PLAYER_NAME 12                                  // max allowed by client name length
+#define MAX_PLAYER_NAME          12                         // max allowed by client name length
 #define MAX_INTERNAL_PLAYER_NAME 15                         // max server internal player name length ( > MAX_PLAYER_NAME for support declined names )
+#define MAX_PET_NAME             12                         // max allowed by client name length
+#define MAX_CHARTER_NAME         24                         // max allowed by client name length
 
 bool normalizePlayerName(std::string& name);
 
@@ -375,7 +381,7 @@ class ObjectMgr
 
         uint32 GetNearestTaxiNode( float x, float y, float z, uint32 mapid );
         void GetTaxiPath( uint32 source, uint32 destination, uint32 &path, uint32 &cost);
-        uint16 GetTaxiMount( uint32 id, uint32 team );
+        uint32 GetTaxiMountDisplayId( uint32 id, uint32 team, bool allowed_alt_team = false);
         void GetTaxiPathNodes( uint32 path, Path &pathnodes, std::vector<uint32>& mapIds );
         void GetTransportPathNodes( uint32 path, TransportPath &pathnodes );
 
@@ -402,8 +408,6 @@ class ObjectMgr
         {
             return mGameObjectForQuestSet.find(entry) != mGameObjectForQuestSet.end();
         }
-
-        bool IsGameObjectOfTypeInRange(Player *player, uint64 guid, GameobjectTypes type) const;
 
         GossipText const* GetGossipText(uint32 Text_ID) const;
 
@@ -483,6 +487,7 @@ class ObjectMgr
         void LoadGameobjects();
         void LoadGameobjectRespawnTimes();
         void LoadItemPrototypes();
+        void LoadItemRequiredTarget();
         void LoadItemLocales();
         void LoadQuestLocales();
         void LoadNpcTextLocales();
@@ -657,16 +662,14 @@ class ObjectMgr
         bool IsReservedName(const std::string& name) const;
 
         // name with valid structure and symbols
-        static bool IsValidName( const std::string& name, bool create = false );
+        static uint8 CheckPlayerName( const std::string& name, bool create = false );
+        static PetNameInvalidReason CheckPetName( const std::string& name );
         static bool IsValidCharterName( const std::string& name );
-        static bool IsValidPetName( const std::string& name );
 
         static bool CheckDeclinedNames(std::wstring mainpart, DeclinedName const& names);
 
         int GetIndexForLocale(LocaleConstant loc);
         LocaleConstant GetLocaleForIndex(int i);
-        // guild bank tabs
-        uint32 GetGuildBankTabPrice(uint8 Index) const { return Index < GUILD_BANK_MAX_TABS ? mGuildBankTabPrice[Index] : 0; }
 
         uint16 GetConditionId(ConditionType condition, uint32 value1, uint32 value2);
         bool IsPlayerMeetToCondition(Player const* player, uint16 condition_id) const
@@ -724,6 +727,12 @@ class ObjectMgr
         ScriptNameMap &GetScriptNames() { return m_scriptNames; }
         const char * GetScriptName(uint32 id) { return id < m_scriptNames.size() ? m_scriptNames[id].c_str() : ""; }
         uint32 GetScriptId(const char *name);
+
+        ItemRequiredTargetMapBounds GetItemRequiredTargetMapBounds(uint32 uiItemEntry) const
+        {
+            return ItemRequiredTargetMapBounds(m_ItemRequiredTarget.lower_bound(uiItemEntry),m_ItemRequiredTarget.upper_bound(uiItemEntry));
+        }
+
     protected:
 
         // first free id for selected id type
@@ -780,6 +789,8 @@ class ObjectMgr
 
         ScriptNameMap       m_scriptNames;
 
+        ItemRequiredTargetMap m_ItemRequiredTarget;
+
         typedef             std::vector<LocaleConstant> LocalForIndex;
         LocalForIndex        m_LocalForIndex;
         int GetOrNewIndexForLocale(LocaleConstant loc);
@@ -825,9 +836,6 @@ class ObjectMgr
         RespawnTimes mCreatureRespawnTimes;
         RespawnTimes mGORespawnTimes;
 
-        typedef std::vector<uint32> GuildBankTabPriceMap;
-        GuildBankTabPriceMap mGuildBankTabPrice;
-
         // Storage for Conditions. First element (index 0) is reserved for zero-condition (nothing required)
         typedef std::vector<PlayerCondition> ConditionStore;
         ConditionStore mConditions;
@@ -841,7 +849,7 @@ class ObjectMgr
 #define objmgr MaNGOS::Singleton<ObjectMgr>::Instance()
 
 // scripting access functions
-MANGOS_DLL_SPEC bool LoadMangosStrings(DatabaseType& db, char const* table,int32 start_value = -1, int32 end_value = std::numeric_limits<int32>::min());
+MANGOS_DLL_SPEC bool LoadMangosStrings(DatabaseType& db, char const* table,int32 start_value = MAX_CREATURE_AI_TEXT_STRING_ID, int32 end_value = std::numeric_limits<int32>::min());
 MANGOS_DLL_SPEC uint32 GetAreaTriggerScriptId(uint32 trigger_id);
 MANGOS_DLL_SPEC uint32 GetScriptId(const char *name);
 MANGOS_DLL_SPEC ObjectMgr::ScriptNameMap& GetScriptNames();
