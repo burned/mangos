@@ -115,14 +115,20 @@ Quest::Quest(Field * questRecord)
     for (int i = 0; i < QUEST_EMOTE_COUNT; ++i)
         DetailsEmote[i] = questRecord[108+i].GetUInt32();
 
-    IncompleteEmote = questRecord[112].GetUInt32();
-    CompleteEmote = questRecord[113].GetUInt32();
+    for (int i = 0; i < QUEST_EMOTE_COUNT; ++i)
+        DetailsEmoteDelay[i] = questRecord[112+i].GetUInt32();
+
+    IncompleteEmote = questRecord[116].GetUInt32();
+    CompleteEmote = questRecord[117].GetUInt32();
 
     for (int i = 0; i < QUEST_EMOTE_COUNT; ++i)
-        OfferRewardEmote[i] = questRecord[114+i].GetInt32();
+        OfferRewardEmote[i] = questRecord[118+i].GetInt32();
 
-    QuestStartScript = questRecord[118].GetUInt32();
-    QuestCompleteScript = questRecord[119].GetUInt32();
+    for (int i = 0; i < QUEST_EMOTE_COUNT; ++i)
+        OfferRewardEmoteDelay[i] = questRecord[122+i].GetInt32();
+
+    QuestStartScript = questRecord[126].GetUInt32();
+    QuestCompleteScript = questRecord[127].GetUInt32();
 
     QuestFlags |= SpecialFlags << 16;
 
@@ -131,7 +137,7 @@ Quest::Quest(Field * questRecord)
     m_rewitemscount = 0;
     m_rewchoiceitemscount = 0;
 
-    for (int i=0; i < QUEST_OBJECTIVES_COUNT; i++)
+    for (int i=0; i < QUEST_OBJECTIVES_COUNT; ++i)
     {
         if ( ReqItemId[i] )
             ++m_reqitemscount;
@@ -139,13 +145,13 @@ Quest::Quest(Field * questRecord)
             ++m_reqCreatureOrGOcount;
     }
 
-    for (int i=0; i < QUEST_REWARDS_COUNT; i++)
+    for (int i=0; i < QUEST_REWARDS_COUNT; ++i)
     {
         if ( RewItemId[i] )
             ++m_rewitemscount;
     }
 
-    for (int i=0; i < QUEST_REWARD_CHOICES_COUNT; i++)
+    for (int i=0; i < QUEST_REWARD_CHOICES_COUNT; ++i)
     {
         if (RewChoiceItemId[i])
             ++m_rewchoiceitemscount;

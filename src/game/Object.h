@@ -46,9 +46,7 @@ enum TypeMask
     TYPEMASK_PLAYER         = 0x0010,
     TYPEMASK_GAMEOBJECT     = 0x0020,
     TYPEMASK_DYNAMICOBJECT  = 0x0040,
-    TYPEMASK_CORPSE         = 0x0080,
-    TYPEMASK_AIGROUP        = 0x0100,
-    TYPEMASK_AREATRIGGER    = 0x0200
+    TYPEMASK_CORPSE         = 0x0080
 };
 
 enum TypeID
@@ -60,11 +58,10 @@ enum TypeID
     TYPEID_PLAYER        = 4,
     TYPEID_GAMEOBJECT    = 5,
     TYPEID_DYNAMICOBJECT = 6,
-    TYPEID_CORPSE        = 7,
-    TYPEID_AIGROUP       = 8,
-    TYPEID_AREATRIGGER   = 9
+    TYPEID_CORPSE        = 7
 };
-#define MAX_TYPEID         10
+
+#define NUM_CLIENT_OBJECT_TYPES             8
 
 uint32 GuidHigh2TypeId(uint32 guid_hi);
 
@@ -101,14 +98,14 @@ typedef UNORDERED_MAP<Player*, UpdateData> UpdateDataMapType;
 struct WorldLocation
 {
     uint32 mapid;
-    float x;
-    float y;
-    float z;
-    float o;
+    float coord_x;
+    float coord_y;
+    float coord_z;
+    float orientation;
     explicit WorldLocation(uint32 _mapid = 0, float _x = 0, float _y = 0, float _z = 0, float _o = 0)
-        : mapid(_mapid), x(_x), y(_y), z(_z), o(_o) {}
+        : mapid(_mapid), coord_x(_x), coord_y(_y), coord_z(_z), orientation(_o) {}
     WorldLocation(WorldLocation const &loc)
-        : mapid(loc.mapid), x(loc.x), y(loc.y), z(loc.z), o(loc.o) {}
+        : mapid(loc.mapid), coord_x(loc.coord_x), coord_y(loc.coord_y), coord_z(loc.coord_z), orientation(loc.orientation) {}
 };
 
 class MANGOS_DLL_SPEC Object
@@ -187,7 +184,7 @@ class MANGOS_DLL_SPEC Object
             return *(((uint8*)&m_uint32Values[ index ])+offset);
         }
 
-        uint8 GetUInt16Value( uint16 index, uint8 offset) const
+        uint16 GetUInt16Value( uint16 index, uint8 offset) const
         {
             ASSERT( index < m_valuesCount || PrintIndexError( index , false) );
             ASSERT( offset < 2 );
@@ -310,13 +307,13 @@ class MANGOS_DLL_SPEC Object
         virtual void _SetUpdateBits(UpdateMask *updateMask, Player *target) const;
 
         virtual void _SetCreateBits(UpdateMask *updateMask, Player *target) const;
-        void _BuildMovementUpdate(ByteBuffer * data, uint8 flags, uint32 flags2 ) const;
+        void _BuildMovementUpdate(ByteBuffer * data, uint16 flags, uint32 flags2 ) const;
         void _BuildValuesUpdate(uint8 updatetype, ByteBuffer *data, UpdateMask *updateMask, Player *target ) const;
 
         uint16 m_objectType;
 
         uint8 m_objectTypeId;
-        uint8 m_updateFlag;
+        uint16 m_updateFlag;
 
         union
         {
@@ -366,12 +363,6 @@ class MANGOS_DLL_SPEC WorldObject : public Object
             m_positionZ = z;
         }
 
-        void Relocate(WorldLocation const & loc)
-        {
-            SetMapId(loc.mapid);
-            Relocate(loc.x, loc.y, loc.z, loc.o);
-        }
-
         void SetOrientation(float orientation) { m_orientation = orientation; }
 
         float GetPositionX( ) const { return m_positionX; }
@@ -380,7 +371,7 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         void GetPosition( float &x, float &y, float &z ) const
             { x = m_positionX; y = m_positionY; z = m_positionZ; }
         void GetPosition( WorldLocation &loc ) const
-            { loc.mapid = GetMapId(); GetPosition(loc.x, loc.y, loc.z); loc.o = GetOrientation(); }
+            { loc.mapid = m_mapId; GetPosition(loc.coord_x, loc.coord_y, loc.coord_z); loc.orientation = GetOrientation(); }
         float GetOrientation( ) const { return m_orientation; }
         void GetNearPoint2D( float &x, float &y, float distance, float absAngle) const;
         void GetNearPoint( WorldObject const* searcher, float &x, float &y, float &z, float searcher_size, float distance2d,float absAngle) const;
@@ -424,27 +415,42 @@ class MANGOS_DLL_SPEC WorldObject : public Object
         virtual const char* GetNameForLocaleIdx(int32 /*locale_idx*/) const { return GetName(); }
 
         float GetDistance( const WorldObject* obj ) const;
-        float GetDistance(const float x, const float y, const float z) const;
+        float GetDistance(float x, float y, float z) const;
         float GetDistance2d(const WorldObject* obj) const;
-        float GetDistance2d(const float x, const float y) const;
+        float GetDistance2d(float x, float y) const;
         float GetDistanceZ(const WorldObject* obj) const;
         bool IsInMap(const WorldObject* obj) const
         {
             return IsInWorld() && obj->IsInWorld() && GetMapId()==obj->GetMapId() &&
                 GetInstanceId()==obj->GetInstanceId() && InSamePhase(obj);
         }
-        bool IsWithinDistInMap(const WorldObject* obj, const float dist2compare, const bool is3D = true) const;
-        bool IsWithinLOS(const float x, const float y, const float z ) const;
+        bool IsWithinDist3d(float x, float y, float z, float dist2compare) const;
+        bool IsWithinDist2d(float x, float y, float dist2compare) const;
+        bool _IsWithinDist(WorldObject const* obj, float dist2compare, bool is3D) const;
+        bool IsWithinDist(WorldObject const* obj, float dist2compare, bool is3D = true) const
+                                                            // use only if you will sure about placing both object at same map
+        {
+            return obj && _IsWithinDist(obj,dist2compare,is3D);
+        }
+        bool IsWithinDistInMap(WorldObject const* obj, float dist2compare, bool is3D = true) const
+        {
+            return obj && IsInMap(obj) && _IsWithinDist(obj,dist2compare,is3D);
+        }
+        bool IsWithinLOS(float x, float y, float z) const;
         bool IsWithinLOSInMap(const WorldObject* obj) const;
+        bool GetDistanceOrder(WorldObject const* obj1, WorldObject const* obj2, bool is3D = true) const;
+        bool IsInRange(WorldObject const* obj, float minRange, float maxRange, bool is3D = true) const;
+        bool IsInRange2d(float x, float y, float minRange, float maxRange) const;
+        bool IsInRange3d(float x, float y, float z, float minRange, float maxRange) const;
 
         float GetAngle( const WorldObject* obj ) const;
         float GetAngle( const float x, const float y ) const;
         bool HasInArc( const float arcangle, const WorldObject* obj ) const;
 
+        virtual void CleanupsBeforeDelete();                // used in destructor or explicitly before mass creature delete to remove cross-references to already deleted units
+
         virtual void SendMessageToSet(WorldPacket *data, bool self);
         virtual void SendMessageToSetInRange(WorldPacket *data, float dist, bool self);
-        void BuildHeartBeatMsg( WorldPacket *data ) const;
-        void BuildTeleportAckMsg( WorldPacket *data, float x, float y, float z, float ang) const;
 
         void MonsterSay(const char* text, uint32 language, uint64 TargetGuid);
         void MonsterYell(const char* text, uint32 language, uint64 TargetGuid);

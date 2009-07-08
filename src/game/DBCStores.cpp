@@ -56,13 +56,15 @@ DBCStorage <CurrencyTypesEntry> sCurrencyTypesStore(CurrencyTypesfmt);
 DBCStorage <DurabilityQualityEntry> sDurabilityQualityStore(DurabilityQualityfmt);
 DBCStorage <DurabilityCostsEntry> sDurabilityCostsStore(DurabilityCostsfmt);
 
-DBCStorage <EmotesTextEntry> sEmotesTextStore(EmoteEntryfmt);
+DBCStorage <EmotesEntry> sEmotesStore(EmotesEntryfmt);
+DBCStorage <EmotesTextEntry> sEmotesTextStore(EmotesTextEntryfmt);
 
 typedef std::map<uint32,SimpleFactionsList> FactionTeamMap;
 static FactionTeamMap sFactionTeamMap;
 DBCStorage <FactionEntry> sFactionStore(FactionEntryfmt);
 DBCStorage <FactionTemplateEntry> sFactionTemplateStore(FactionTemplateEntryfmt);
 
+DBCStorage <GameObjectDisplayInfoEntry> sGameObjectDisplayInfoStore(GameObjectDisplayInfofmt);
 DBCStorage <GemPropertiesEntry> sGemPropertiesStore(GemPropertiesEntryfmt);
 DBCStorage <GlyphPropertiesEntry> sGlyphPropertiesStore(GlyphPropertiesfmt);
 DBCStorage <GlyphSlotEntry> sGlyphSlotStore(GlyphSlotfmt);
@@ -127,9 +129,6 @@ TalentSpellPosMap sTalentSpellPosMap;
 DBCStorage <TalentTabEntry> sTalentTabStore(TalentTabEntryfmt);
 
 // store absolute bit position for first rank for talent inspect
-typedef std::map<uint32,uint32> TalentInspectMap;
-static TalentInspectMap sTalentPosInInspect;
-static TalentInspectMap sTalentTabSizeInInspect;
 static uint32 sTalentTabPages[12/*MAX_CLASSES*/][3];
 
 DBCStorage <TaxiNodesEntry> sTaxiNodesStore(TaxiNodesEntryfmt);
@@ -148,8 +147,8 @@ DBCStorage <TotemCategoryEntry> sTotemCategoryStore(TotemCategoryEntryfmt);
 DBCStorage <VehicleEntry> sVehicleStore(VehicleEntryfmt);
 DBCStorage <VehicleSeatEntry> sVehicleSeatStore(VehicleSeatEntryfmt);
 DBCStorage <WorldMapAreaEntry>  sWorldMapAreaStore(WorldMapAreaEntryfmt);
-DBCStorage <WorldSafeLocsEntry> sWorldSafeLocsStore(WorldSafeLocsEntryfmt);
 DBCStorage <WorldMapOverlayEntry> sWorldMapOverlayStore(WorldMapOverlayEntryfmt);
+DBCStorage <WorldSafeLocsEntry> sWorldSafeLocsStore(WorldSafeLocsEntryfmt);
 
 typedef std::list<std::string> StoreProblemList;
 
@@ -201,7 +200,7 @@ void LoadDBCStores(const std::string& dataPath)
 {
     std::string dbcPath = dataPath+"dbc/";
 
-    const uint32 DBCFilesCount = 77;
+    const uint32 DBCFilesCount = 79;
 
     barGoLink bar( DBCFilesCount );
 
@@ -246,6 +245,7 @@ void LoadDBCStores(const std::string& dataPath)
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sCurrencyTypesStore,       dbcPath,"CurrencyTypes.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sDurabilityCostsStore,     dbcPath,"DurabilityCosts.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sDurabilityQualityStore,   dbcPath,"DurabilityQuality.dbc");
+    LoadDBC(availableDbcLocales,bar,bad_dbc_files,sEmotesStore,              dbcPath,"Emotes.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sEmotesTextStore,          dbcPath,"EmotesText.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sFactionStore,             dbcPath,"Faction.dbc");
     for (uint32 i=0;i<sFactionStore.GetNumRows(); ++i)
@@ -259,6 +259,7 @@ void LoadDBCStores(const std::string& dataPath)
     }
 
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sFactionTemplateStore,     dbcPath,"FactionTemplate.dbc");
+    LoadDBC(availableDbcLocales,bar,bad_dbc_files,sGameObjectDisplayInfoStore,dbcPath,"GameObjectDisplayInfo.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sGemPropertiesStore,       dbcPath,"GemProperties.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sGlyphPropertiesStore,     dbcPath,"GlyphProperties.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sGlyphSlotStore,           dbcPath,"GlyphSlot.dbc");
@@ -363,34 +364,6 @@ void LoadDBCStores(const std::string& dataPath)
 
     // prepare fast data access to bit pos of talent ranks for use at inspecting
     {
-        // fill table by amount of talent ranks and fill sTalentTabBitSizeInInspect
-        // store in with (row,col,talent)->size key for correct sorting by (row,col)
-        typedef std::map<uint32,uint32> TalentBitSize;
-        TalentBitSize sTalentBitSize;
-        for(uint32 i = 1; i < sTalentStore.GetNumRows(); ++i)
-        {
-            TalentEntry const *talentInfo = sTalentStore.LookupEntry(i);
-            if (!talentInfo) continue;
-
-            TalentTabEntry const *talentTabInfo = sTalentTabStore.LookupEntry( talentInfo->TalentTab );
-            if(!talentTabInfo)
-                continue;
-
-            // find talent rank
-            uint32 curtalent_maxrank = 0;
-            for(uint32 k = MAX_TALENT_RANK; k > 0; --k)
-            {
-                if(talentInfo->RankID[k-1])
-                {
-                    curtalent_maxrank = k;
-                    break;
-                }
-            }
-
-            sTalentBitSize[(talentInfo->Row<<24) + (talentInfo->Col<<16)+talentInfo->TalentID] = curtalent_maxrank;
-            sTalentTabSizeInInspect[talentInfo->TalentTab] += curtalent_maxrank;
-        }
-
         // now have all max ranks (and then bit amount used for store talent ranks in inspect)
         for(uint32 talentTabId = 1; talentTabId < sTalentTabStore.GetNumRows(); ++talentTabId)
         {
@@ -407,22 +380,6 @@ void LoadDBCStores(const std::string& dataPath)
             for(uint32 m=1;!(m & talentTabInfo->ClassMask) && cls < MAX_CLASSES;m <<=1, ++cls) {}
 
             sTalentTabPages[cls][talentTabInfo->tabpage]=talentTabId;
-
-            // add total amount bits for first rank starting from talent tab first talent rank pos.
-            uint32 pos = 0;
-            for(TalentBitSize::iterator itr = sTalentBitSize.begin(); itr != sTalentBitSize.end(); ++itr)
-            {
-                uint32 talentId = itr->first & 0xFFFF;
-                TalentEntry const *talentInfo = sTalentStore.LookupEntry( talentId );
-                if(!talentInfo)
-                    continue;
-
-                if(talentInfo->TalentTab != talentTabId)
-                    continue;
-
-                sTalentPosInInspect[talentId] = pos;
-                pos+= itr->second;
-            }
         }
     }
 
@@ -506,8 +463,8 @@ void LoadDBCStores(const std::string& dataPath)
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sVehicleStore,             dbcPath,"Vehicle.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sVehicleSeatStore,         dbcPath,"VehicleSeat.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sWorldMapAreaStore,        dbcPath,"WorldMapArea.dbc");
-    LoadDBC(availableDbcLocales,bar,bad_dbc_files,sWorldSafeLocsStore,       dbcPath,"WorldSafeLocs.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sWorldMapOverlayStore,     dbcPath,"WorldMapOverlay.dbc");
+    LoadDBC(availableDbcLocales,bar,bad_dbc_files,sWorldSafeLocsStore,       dbcPath,"WorldSafeLocs.dbc");
 
     // error checks
     if(bad_dbc_files.size() >= DBCFilesCount )
@@ -526,13 +483,13 @@ void LoadDBCStores(const std::string& dataPath)
     }
 
     // Check loaded DBC files proper version
-    if( !sSpellStore.LookupEntry(62735)            ||       // last added spell in 3.0.9
-        !sMapStore.LookupEntry(624)                ||       // last map added in 3.0.8a/3.0.9
-        !sGemPropertiesStore.LookupEntry(1557)     ||       // last gem property added in 3.0.8a/3.0.9
-        !sItemExtendedCostStore.LookupEntry(2589)  ||       // last item extended cost added in 3.0.8a/3.0.9
-        !sCharTitlesStore.LookupEntry(144)         ||       // last char title added in 3.0.8a/3.0.9
-        !sAreaStore.LookupEntry(2769)              ||       // last area (areaflag) added in 3.0.8a/3.0.9
-        !sItemStore.LookupEntry(45037)             )        // last client known item added in 3.0.9
+    if( !sSpellStore.LookupEntry(66530)            ||       // last added spell in 3.1.3
+        !sMapStore.LookupEntry(624)                ||       // last map added in 3.1.3
+        !sGemPropertiesStore.LookupEntry(1609)     ||       // last gem property added in 3.1.3
+        !sItemExtendedCostStore.LookupEntry(2671)  ||       // last item extended cost added in 3.1.3
+        !sCharTitlesStore.LookupEntry(166)         ||       // last char title added in 3.1.3
+        !sAreaStore.LookupEntry(2905)              ||       // last area (areaflag) added in 3.1.3
+        !sItemStore.LookupEntry(46894)             )        // last client known item added in 3.1.3
     {
         sLog.outError("\nYou have _outdated_ DBC files. Please extract correct versions from current using client.");
         exit(1);
@@ -702,24 +659,6 @@ void Map2ZoneCoordinates(float& x,float& y,uint32 zone)
     std::swap(x,y);                                         // client have map coords swapped
 }
 
-uint32 GetTalentInspectBitPosInTab(uint32 talentId)
-{
-    TalentInspectMap::const_iterator itr = sTalentPosInInspect.find(talentId);
-    if(itr == sTalentPosInInspect.end())
-        return 0;
-
-    return itr->second;
-}
-
-uint32 GetTalentTabInspectBitSize(uint32 talentTabId)
-{
-    TalentInspectMap::const_iterator itr = sTalentTabSizeInInspect.find(talentTabId);
-    if(itr == sTalentTabSizeInInspect.end())
-        return 0;
-
-    return itr->second;
-}
-
 uint32 const* GetTalentTabPages(uint32 cls)
 {
     return sTalentTabPages[cls];
@@ -732,3 +671,5 @@ MANGOS_DLL_SPEC DBCStorage <SpellRangeEntry>    const* GetSpellRangeStore()     
 MANGOS_DLL_SPEC DBCStorage <FactionEntry>       const* GetFactionStore()        { return &sFactionStore;        }
 MANGOS_DLL_SPEC DBCStorage <ItemEntry>          const* GetItemDisplayStore()    { return &sItemStore;           }
 MANGOS_DLL_SPEC DBCStorage <CreatureDisplayInfoEntry> const* GetCreatureDisplayStore() { return &sCreatureDisplayInfoStore; }
+MANGOS_DLL_SPEC DBCStorage <EmotesEntry>        const* GetEmotesStore()         { return &sEmotesStore;         }
+MANGOS_DLL_SPEC DBCStorage <EmotesTextEntry>    const* GetEmotesTextStore()     { return &sEmotesTextStore;     }

@@ -38,6 +38,7 @@ alter table creature_movement add `wpguid` int(11) default '0';
 #include "DestinationHolderImp.h"
 #include "CreatureAI.h"
 #include "WaypointManager.h"
+#include "WorldPacket.h"
 
 #include <cassert>
 
@@ -56,7 +57,7 @@ void WaypointMovementGenerator<Creature>::LoadPath(Creature &c)
 
     uint32 node_count = i_path->size();
     i_hasDone.resize(node_count);
-    for(uint32 i = 0; i < node_count-1; i++)
+    for(uint32 i = 0; i < node_count-1; ++i)
         i_hasDone[i] = false;
 
     // to prevent a misbehavior inside "update"
@@ -109,7 +110,7 @@ bool WaypointMovementGenerator<Creature>::Update(Creature &creature, const uint3
             // Now we re-set destination to same node and start travel
             creature.addUnitState(UNIT_STAT_ROAMING);
             if (creature.canFly())
-                creature.AddUnitMovementFlag(MOVEMENTFLAG_FLYING2);
+                creature.AddMonsterMoveFlag(MONSTER_MOVE_FLY);
             const WaypointNode &node = i_path->at(i_currentNode);
             i_destinationHolder.SetDestination(traveller, node.x, node.y, node.z);
             i_nextMoveTime.Reset(i_destinationHolder.GetTotalTravelTime());
@@ -172,7 +173,7 @@ bool WaypointMovementGenerator<Creature>::Update(Creature &creature, const uint3
         {
             creature.addUnitState(UNIT_STAT_ROAMING);
             if (creature.canFly())
-                creature.AddUnitMovementFlag(MOVEMENTFLAG_FLYING2);
+                creature.AddMonsterMoveFlag(MONSTER_MOVE_FLY);
             const WaypointNode &node = i_path->at(i_currentNode);
             i_destinationHolder.SetDestination(traveller, node.x, node.y, node.z);
             i_nextMoveTime.Reset(i_destinationHolder.GetTotalTravelTime());
@@ -240,7 +241,7 @@ void FlightPathMovementGenerator::Initialize(Player &player)
     // do not send movement, it was sent already
     i_destinationHolder.SetDestination(traveller, i_path[i_currentNode].x, i_path[i_currentNode].y, i_path[i_currentNode].z, false);
 
-    player.SendMonsterMoveByPath(GetPath(),GetCurrentNode(),GetPathAtMapEnd(),MOVEMENTFLAG_WALK_MODE|MOVEMENTFLAG_ONTRANSPORT);
+    player.SendMonsterMoveByPath(GetPath(),GetCurrentNode(),GetPathAtMapEnd(),MONSTER_MOVE_SPLINE_FLY);
 }
 
 void FlightPathMovementGenerator::Finalize(Player & player)
@@ -249,7 +250,7 @@ void FlightPathMovementGenerator::Finalize(Player & player)
     player.clearUnitState(UNIT_STAT_IN_FLIGHT);
 
     float x, y, z;
-    i_destinationHolder.GetLocationNow(player.GetMapId(), x, y, z);
+    i_destinationHolder.GetLocationNow(player.GetBaseMap(), x, y, z);
     player.SetPosition(x, y, z, player.GetOrientation());
 
     player.Unmount();
@@ -261,7 +262,9 @@ void FlightPathMovementGenerator::Finalize(Player & player)
         if(player.pvpInfo.inHostileArea)
             player.CastSpell(&player, 2479, true);
 
-        player.SetUnitMovementFlags(MOVEMENTFLAG_WALK_MODE);
+        // update z position to ground and orientation for landing point
+        // this prevent cheating with landing  point at lags
+        // when client side flight end early in comparison server side
         player.StopMoving();
     }
 }
@@ -470,7 +473,7 @@ int CreatePathAStar(gentity_t *bot, int from, int to, short int *pathlist)
                     break;
             }
 
-            for (i = 0; i < nodes[atNode].enodenum; i++)    //loop through all the links for this node
+            for (i = 0; i < nodes[atNode].enodenum; ++i)    //loop through all the links for this node
             {
                 newnode = nodes[atNode].links[i].targetNode;
 
@@ -528,7 +531,7 @@ int CreatePathAStar(gentity_t *bot, int from, int to, short int *pathlist)
                         parent[newnode] = atNode;           //set the new parent for this node
                         gcost[newnode] = gc;                //and the new g cost
 
-                        for (i = 1; i < numOpen; i++)       //loop through all the items on the open list
+                        for (i = 1; i < numOpen; ++i)       //loop through all the items on the open list
                         {
                             if (openlist[i] == newnode)     //find this node in the list
                             {

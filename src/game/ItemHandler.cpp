@@ -199,7 +199,7 @@ void WorldSession::HandleAutoEquipItemOpcode( WorldPacket & recv_data )
 
         // check dest->src move possibility
         ItemPosCountVec sSrc;
-        uint16 eSrc;
+        uint16 eSrc = 0;
         if( _player->IsInventoryPos( src ) )
         {
             msg = _player->CanStoreItem( srcbag, srcslot, sSrc, pDstItem, true );
@@ -439,6 +439,7 @@ void WorldSession::HandleItemQuerySingleOpcode( WorldPacket & recv_data )
         data << pProto->ArmorDamageModifier;
         data << pProto->Duration;                           // added in 2.4.2.8209, duration (seconds)
         data << pProto->ItemLimitCategory;                  // WotLK, ItemLimitCategory
+        data << pProto->HolidayId;                          // Holiday.dbc?
         SendPacket( &data );
     }
     else
@@ -516,7 +517,7 @@ void WorldSession::HandleSellItemOpcode( WorldPacket & recv_data )
     if(!itemguid)
         return;
 
-    Creature *pCreature = ObjectAccessor::GetNPCIfCanInteractWith(*_player, vendorguid,UNIT_NPC_FLAG_VENDOR);
+    Creature *pCreature = GetPlayer()->GetNPCIfCanInteractWith(vendorguid,UNIT_NPC_FLAG_VENDOR);
     if (!pCreature)
     {
         sLog.outDebug( "WORLD: HandleSellItemOpcode - Unit (GUID: %u) not found or you can't interact with him.", uint32(GUID_LOPART(vendorguid)) );
@@ -621,7 +622,7 @@ void WorldSession::HandleBuybackItem(WorldPacket & recv_data)
 
     recv_data >> vendorguid >> slot;
 
-    Creature *pCreature = ObjectAccessor::GetNPCIfCanInteractWith(*_player, vendorguid,UNIT_NPC_FLAG_VENDOR);
+    Creature *pCreature = GetPlayer()->GetNPCIfCanInteractWith(vendorguid,UNIT_NPC_FLAG_VENDOR);
     if (!pCreature)
     {
         sLog.outDebug( "WORLD: HandleBuybackItem - Unit (GUID: %u) not found or you can't interact with him.", uint32(GUID_LOPART(vendorguid)) );
@@ -662,28 +663,52 @@ void WorldSession::HandleBuybackItem(WorldPacket & recv_data)
 
 void WorldSession::HandleBuyItemInSlotOpcode( WorldPacket & recv_data )
 {
-    CHECK_PACKET_SIZE(recv_data,8+4+8+1+1);
+    CHECK_PACKET_SIZE(recv_data,8+4+4+8+1+4);
 
     sLog.outDebug(  "WORLD: Received CMSG_BUY_ITEM_IN_SLOT" );
     uint64 vendorguid, bagguid;
-    uint32 item;
-    uint8 slot, count;
+    uint32 item, slot, count;
+    uint8 bagslot;
 
-    recv_data >> vendorguid >> item >> bagguid >> slot >> count;
+    recv_data >> vendorguid >> item  >> slot >> bagguid >> bagslot >> count;
 
-    GetPlayer()->BuyItemFromVendor(vendorguid,item,count,bagguid,slot);
+    uint8 bag = NULL_BAG;                                   // init for case invalid bagGUID
+
+    // find bag slot by bag guid
+    if (bagguid == _player->GetGUID())
+        bag = INVENTORY_SLOT_BAG_0;
+    else
+    {
+        for (int i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END;++i)
+        {
+            if (Bag *pBag = (Bag*)_player->GetItemByPos(INVENTORY_SLOT_BAG_0,i))
+            {
+                if (bagguid == pBag->GetGUID())
+                {
+                    bag = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    // bag not found, cheating?
+    if (bag == NULL_BAG)
+        return;
+
+    GetPlayer()->BuyItemFromVendor(vendorguid,item,count,bag,bagslot);
 }
 
 void WorldSession::HandleBuyItemOpcode( WorldPacket & recv_data )
 {
-    CHECK_PACKET_SIZE(recv_data,8+4+1+1);
+    CHECK_PACKET_SIZE(recv_data,8+4+4+4+1);
 
     sLog.outDebug(  "WORLD: Received CMSG_BUY_ITEM" );
     uint64 vendorguid;
-    uint32 item;
-    uint8 count, unk1;
+    uint32 item, slot, count;
+    uint8 unk1;
 
-    recv_data >> vendorguid >> item >> count >> unk1;
+    recv_data >> vendorguid >> item >> slot >> count >> unk1;
 
     GetPlayer()->BuyItemFromVendor(vendorguid,item,count,NULL_BAG,NULL_SLOT);
 }
@@ -708,7 +733,7 @@ void WorldSession::SendListInventory( uint64 vendorguid )
 {
     sLog.outDebug(  "WORLD: Sent SMSG_LIST_INVENTORY" );
 
-    Creature *pCreature = ObjectAccessor::GetNPCIfCanInteractWith(*_player, vendorguid,UNIT_NPC_FLAG_VENDOR);
+    Creature *pCreature = GetPlayer()->GetNPCIfCanInteractWith(vendorguid,UNIT_NPC_FLAG_VENDOR);
     if (!pCreature)
     {
         sLog.outDebug( "WORLD: SendListInventory - Unit (GUID: %u) not found or you can't interact with him.", uint32(GUID_LOPART(vendorguid)) );
@@ -835,14 +860,14 @@ void WorldSession::HandleBuyBankSlotOpcode(WorldPacket& recvPacket)
     recvPacket >> guid;
 
     // cheating protection
-    Creature *pCreature = ObjectAccessor::GetNPCIfCanInteractWith(*_player, guid, UNIT_NPC_FLAG_BANKER);
+    Creature *pCreature = GetPlayer()->GetNPCIfCanInteractWith(guid, UNIT_NPC_FLAG_BANKER);
     if(!pCreature)
     {
         sLog.outDebug( "WORLD: HandleBuyBankSlotOpcode - Unit (GUID: %u) not found or you can't interact with him.", uint32(GUID_LOPART(guid)) );
         return;
     }
 
-    uint32 slot = _player->GetByteValue(PLAYER_BYTES_2, 2);
+    uint32 slot = _player->GetBankBagSlotCount();
 
     // next slot
     ++slot;
@@ -860,7 +885,7 @@ void WorldSession::HandleBuyBankSlotOpcode(WorldPacket& recvPacket)
         return;
 
     _player->GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_BUY_BANK_SLOT, slot);
-    _player->SetByteValue(PLAYER_BYTES_2, 2, slot);
+    _player->SetBankBagSlotCount(slot);
     _player->ModifyMoney(-int32(price));
 }
 
@@ -1007,7 +1032,13 @@ void WorldSession::HandleItemNameQueryOpcode(WorldPacket & recv_data)
         return;
     }
     else
-        sLog.outDebug("WORLD: CMSG_ITEM_NAME_QUERY for item %u failed (unknown item)", itemid);
+    {
+        // listed in dbc or not expected to exist unknown item
+        if(sItemStore.LookupEntry(itemid))
+            sLog.outErrorDb("WORLD: CMSG_ITEM_NAME_QUERY for item %u failed (item listed in Item.dbc but not exist in DB)", itemid);
+        else
+            sLog.outError("WORLD: CMSG_ITEM_NAME_QUERY for item %u failed (unknown item, not listed in Item.dbc)", itemid);
+    }
 }
 
 void WorldSession::HandleWrapItemOpcode(WorldPacket& recv_data)
@@ -1319,7 +1350,7 @@ void WorldSession::HandleSocketOpcode(WorldPacket& recv_data)
     _player->ToggleMetaGemsActive(slot, true);              //turn on all metagems (except for target item)
 }
 
-void WorldSession::HandleCancelTempItemEnchantmentOpcode(WorldPacket& recv_data)
+void WorldSession::HandleCancelTempEnchantmentOpcode(WorldPacket& recv_data)
 {
     sLog.outDebug("WORLD: CMSG_CANCEL_TEMP_ENCHANTMENT");
 

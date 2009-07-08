@@ -40,8 +40,8 @@ GameObject::GameObject() : WorldObject()
 {
     m_objectType |= TYPEMASK_GAMEOBJECT;
     m_objectTypeId = TYPEID_GAMEOBJECT;
-                                                            // 2.3.2 - 0x58
-    m_updateFlag = (UPDATEFLAG_LOWGUID | UPDATEFLAG_HIGHGUID | UPDATEFLAG_HAS_POSITION);
+
+    m_updateFlag = (UPDATEFLAG_HIGHGUID | UPDATEFLAG_HAS_POSITION | UPDATEFLAG_POSITION | UPDATEFLAG_ROTATION);
 
     m_valuesCount = GAMEOBJECT_END;
     m_respawnTime = 0;
@@ -55,21 +55,40 @@ GameObject::GameObject() : WorldObject()
     m_goInfo = NULL;
 
     m_DBTableGuid = 0;
+    m_rotation = 0;
 }
 
 GameObject::~GameObject()
 {
+    CleanupsBeforeDelete();
+}
+
+void GameObject::CleanupsBeforeDelete()
+{
     if(m_uint32Values)                                      // field array can be not exist if GameOBject not loaded
     {
         // Possible crash at access to deleted GO in Unit::m_gameobj
-        uint64 owner_guid = GetOwnerGUID();
-        if(owner_guid)
+        if(uint64 owner_guid = GetOwnerGUID())
         {
-            Unit* owner = ObjectAccessor::GetUnit(*this,owner_guid);
+            Unit* owner = NULL;
+            if(IS_PLAYER_GUID(owner_guid))
+                owner = ObjectAccessor::GetObjectInWorld(owner_guid, (Player*)NULL);
+            else
+                owner = ObjectAccessor::GetUnit(*this,owner_guid);
+
             if(owner)
                 owner->RemoveGameObject(this,false);
-            else if(!IS_PLAYER_GUID(owner_guid))
-                sLog.outError("Delete GameObject (GUID: %u Entry: %u ) that have references in not found creature %u GO list. Crash possible later.",GetGUIDLow(),GetGOInfo()->id,GUID_LOPART(owner_guid));
+            else
+            {
+                char * ownerType = "creature";
+                if(IS_PLAYER_GUID(owner_guid))
+                    ownerType = "player";
+                else if(IS_PET_GUID(owner_guid))
+                    ownerType = "pet";
+
+                sLog.outError("Delete GameObject (GUID: %u Entry: %u SpellId %u LinkedGO %u) that lost references to owner (GUID %u Type '%s') GO list. Crash possible later.",
+                    GetGUIDLow(), GetGOInfo()->id, m_spellId, GetLinkedGameObjectEntry(), GUID_LOPART(owner_guid), ownerType);
+            }
         }
     }
 }
@@ -88,7 +107,7 @@ void GameObject::RemoveFromWorld()
     Object::RemoveFromWorld();
 }
 
-bool GameObject::Create(uint32 guidlow, uint32 name_id, Map *map, uint32 phaseMask, float x, float y, float z, float ang, float rotation0, float rotation1, float rotation2, float rotation3, uint32 animprogress, uint32 go_state)
+bool GameObject::Create(uint32 guidlow, uint32 name_id, Map *map, uint32 phaseMask, float x, float y, float z, float ang, float rotation0, float rotation1, float rotation2, float rotation3, uint32 animprogress, GOState go_state)
 {
     Relocate(x,y,z,ang);
     SetMapId(map->GetId());
@@ -117,10 +136,6 @@ bool GameObject::Create(uint32 guidlow, uint32 name_id, Map *map, uint32 phaseMa
         sLog.outErrorDb("Gameobject (GUID: %u Entry: %u) not created: it have not exist GO type '%u' in `gameobject_template`. It's will crash client if created.",guidlow,name_id,goinfo->type);
         return false;
     }
-
-    SetFloatValue(GAMEOBJECT_POS_X, x);
-    SetFloatValue(GAMEOBJECT_POS_Y, y);
-    SetFloatValue(GAMEOBJECT_POS_Z, z);
 
     SetFloatValue(GAMEOBJECT_PARENTROTATION+0, rotation0);
     SetFloatValue(GAMEOBJECT_PARENTROTATION+1, rotation1);
@@ -188,7 +203,7 @@ void GameObject::Update(uint32 /*p_time*/)
                         Unit* caster = GetOwner();
                         if(caster && caster->GetTypeId()==TYPEID_PLAYER)
                         {
-                            SetGoState(0);
+                            SetGoState(GO_STATE_ACTIVE);
                             SetUInt32Value(GAMEOBJECT_FLAGS, GO_FLAG_NODESPAWN);
 
                             UpdateData udata;
@@ -246,11 +261,11 @@ void GameObject::Update(uint32 /*p_time*/)
                         case GAMEOBJECT_TYPE_DOOR:
                         case GAMEOBJECT_TYPE_BUTTON:
                             //we need to open doors if they are closed (add there another condition if this code breaks some usage, but it need to be here for battlegrounds)
-                            if( !GetGoState() )
-                                SwitchDoorOrButton(false);
+                            if (GetGoState() != GO_STATE_READY)
+                                ResetDoorOrButton();
                             //flags in AB are type_button and we need to add them here so no break!
                         default:
-                            if(!m_spawnedByDefault)         // despawn timer
+                            if (!m_spawnedByDefault)        // despawn timer
                             {
                                                             // can be despawned or destroyed
                                 SetLootState(GO_JUST_DEACTIVATED);
@@ -368,11 +383,8 @@ void GameObject::Update(uint32 /*p_time*/)
             {
                 case GAMEOBJECT_TYPE_DOOR:
                 case GAMEOBJECT_TYPE_BUTTON:
-                    if(GetAutoCloseTime() && (m_cooldownTime < time(NULL)))
-                    {
-                        SwitchDoorOrButton(false);
-                        SetLootState(GO_JUST_DEACTIVATED);
-                    }
+                    if (GetAutoCloseTime() && (m_cooldownTime < time(NULL)))
+                        ResetDoorOrButton();
                     break;
             }
             break;
@@ -386,8 +398,8 @@ void GameObject::Update(uint32 /*p_time*/)
 
                 if(spellId)
                 {
-                    std::set<uint32>::iterator it = m_unique_users.begin();
-                    std::set<uint32>::iterator end = m_unique_users.end();
+                    std::set<uint32>::const_iterator it = m_unique_users.begin();
+                    std::set<uint32>::const_iterator end = m_unique_users.end();
                     for (; it != end; it++)
                     {
                         Unit* owner = Unit::GetUnit(*this, uint64(*it));
@@ -402,7 +414,10 @@ void GameObject::Update(uint32 /*p_time*/)
 
             if(GetOwnerGUID())
             {
-                m_respawnTime = 0;
+                if(Unit* owner = GetOwner())
+                    owner->RemoveGameObject(this, false);
+
+                SetRespawnTime(0);
                 Delete();
                 return;
             }
@@ -460,7 +475,7 @@ void GameObject::Delete()
 {
     SendObjectDeSpawnAnim(GetGUID());
 
-    SetGoState(1);
+    SetGoState(GO_STATE_READY);
     SetUInt32Value(GAMEOBJECT_FLAGS, GetGOInfo()->flags);
 
     uint16 poolid = poolhandler.IsPartOfAPool(GetGUIDLow(), TYPEID_GAMEOBJECT);
@@ -515,10 +530,10 @@ void GameObject::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask)
     data.id = GetEntry();
     data.mapid = mapid;
     data.phaseMask = phaseMask;
-    data.posX = GetFloatValue(GAMEOBJECT_POS_X);
-    data.posY = GetFloatValue(GAMEOBJECT_POS_Y);
-    data.posZ = GetFloatValue(GAMEOBJECT_POS_Z);
-    data.orientation = GetFloatValue(GAMEOBJECT_FACING);
+    data.posX = GetPositionX();
+    data.posY = GetPositionY();
+    data.posZ = GetPositionZ();
+    data.orientation = GetOrientation();
     data.rotation0 = GetFloatValue(GAMEOBJECT_PARENTROTATION+0);
     data.rotation1 = GetFloatValue(GAMEOBJECT_PARENTROTATION+1);
     data.rotation2 = GetFloatValue(GAMEOBJECT_PARENTROTATION+2);
@@ -536,17 +551,17 @@ void GameObject::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask)
         << mapid << ", "
         << uint32(spawnMask) << ","                         // cast to prevent save as symbol
         << uint16(GetPhaseMask()) << ","                    // prevent out of range error
-        << GetFloatValue(GAMEOBJECT_POS_X) << ", "
-        << GetFloatValue(GAMEOBJECT_POS_Y) << ", "
-        << GetFloatValue(GAMEOBJECT_POS_Z) << ", "
-        << GetFloatValue(GAMEOBJECT_FACING) << ", "
+        << GetPositionX() << ", "
+        << GetPositionY() << ", "
+        << GetPositionZ() << ", "
+        << GetOrientation() << ", "
         << GetFloatValue(GAMEOBJECT_PARENTROTATION) << ", "
         << GetFloatValue(GAMEOBJECT_PARENTROTATION+1) << ", "
         << GetFloatValue(GAMEOBJECT_PARENTROTATION+2) << ", "
         << GetFloatValue(GAMEOBJECT_PARENTROTATION+3) << ", "
         << m_respawnDelayTime << ", "
-        << (uint32)GetGoAnimProgress() << ", "
-        << (uint32)GetGoState() << ")";
+        << uint32(GetGoAnimProgress()) << ", "
+        << uint32(GetGoState()) << ")";
 
     WorldDatabase.BeginTransaction();
     WorldDatabase.PExecuteLog("DELETE FROM gameobject WHERE guid = '%u'", m_DBTableGuid);
@@ -578,7 +593,7 @@ bool GameObject::LoadFromDB(uint32 guid, Map *map)
     float rotation3 = data->rotation3;
 
     uint32 animprogress = data->animprogress;
-    uint32 go_state = data->go_state;
+    GOState go_state = data->go_state;
 
     m_DBTableGuid = guid;
     if (map->GetInstanceId() != 0) guid = objmgr.GenerateLowGuid(HIGHGUID_GAMEOBJECT);
@@ -627,11 +642,6 @@ void GameObject::DeleteFromDB()
     WorldDatabase.PExecuteLog("DELETE FROM game_event_gameobject WHERE guid = '%u'", m_DBTableGuid);
 }
 
-GameObject* GameObject::GetGameObject(WorldObject& object, uint64 guid)
-{
-    return ObjectAccessor::GetGameObject(object,guid);
-}
-
 GameObjectInfo const *GameObject::GetGOInfo() const
 {
     return m_goInfo;
@@ -648,8 +658,6 @@ uint32 GameObject::GetLootId(GameObjectInfo const* ginfo)
             return ginfo->chest.lootId;
         case GAMEOBJECT_TYPE_FISHINGHOLE:
             return ginfo->fishinghole.lootId;
-        case GAMEOBJECT_TYPE_FISHINGNODE:
-            return ginfo->fishnode.lootId;
         default:
             return 0;
     }
@@ -818,7 +826,17 @@ GameObject* GameObject::LookupFishingHoleAround(float range)
     return ok;
 }
 
-void GameObject::UseDoorOrButton(uint32 time_to_restore)
+void GameObject::ResetDoorOrButton()
+{
+    if (m_lootState == GO_READY || m_lootState == GO_JUST_DEACTIVATED)
+        return;
+
+    SwitchDoorOrButton(false);
+    SetLootState(GO_JUST_DEACTIVATED);
+    m_cooldownTime = 0;
+}
+
+void GameObject::UseDoorOrButton(uint32 time_to_restore, bool alternative /* = false */)
 {
     if(m_lootState != GO_READY)
         return;
@@ -826,24 +844,23 @@ void GameObject::UseDoorOrButton(uint32 time_to_restore)
     if(!time_to_restore)
         time_to_restore = GetAutoCloseTime();
 
-    SwitchDoorOrButton(true);
+    SwitchDoorOrButton(true,alternative);
     SetLootState(GO_ACTIVATED);
 
     m_cooldownTime = time(NULL) + time_to_restore;
-
 }
 
-void GameObject::SwitchDoorOrButton(bool activate)
+void GameObject::SwitchDoorOrButton(bool activate, bool alternative /* = false */)
 {
     if(activate)
         SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_IN_USE);
     else
         RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_IN_USE);
 
-    if(GetGoState())                                        //if closed -> open
-        SetGoState(0);
+    if(GetGoState() == GO_STATE_READY)                      //if closed -> open
+        SetGoState(alternative ? GO_STATE_ACTIVE_ALTERNATIVE : GO_STATE_ACTIVE);
     else                                                    //if open -> close
-        SetGoState(1);
+        SetGoState(GO_STATE_READY);
 }
 
 void GameObject::Use(Unit* user)
@@ -901,7 +918,7 @@ void GameObject::Use(Unit* user)
                 // every slot will be on that straight line
                 float orthogonalOrientation = GetOrientation()+M_PI*0.5f;
                 // find nearest slot
-                for(uint32 i=0; i<info->chair.slots; i++)
+                for(uint32 i=0; i<info->chair.slots; ++i)
                 {
                     // the distance between this slot and the center of the go - imagine a 1D space
                     float relativeDistance = (info->size*i)-(info->size*(info->chair.slots-1)/2.0f);
@@ -955,6 +972,9 @@ void GameObject::Use(Unit* user)
 
                 // possible quest objective for active quests
                 player->CastedCreatureOrGO(info->id, GetGUID(), 0);
+
+                if (info->goober.eventId)
+                    sWorld.ScriptsStart(sEventScripts, info->goober.eventId, player, this);
             }
 
             // cast this spell later if provided
@@ -975,6 +995,9 @@ void GameObject::Use(Unit* user)
 
             if (info->camera.cinematicId)
                 player->SendCinematicStart(info->camera.cinematicId);
+
+            if (info->camera.eventID)
+                sWorld.ScriptsStart(sEventScripts, info->camera.eventID, player, this);
 
             return;
         }
@@ -1027,6 +1050,7 @@ void GameObject::Use(Unit* user)
                         if (ok)
                         {
                             player->SendLoot(ok->GetGUID(),LOOT_FISHINGHOLE);
+                            player->UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_FISH_IN_GAMEOBJECT, ok->GetGOInfo()->id);
                             SetLootState(GO_JUST_DEACTIVATED);
                         }
                         else
@@ -1299,14 +1323,21 @@ void GameObject::UpdateRotationFields(float rotation2 /*=0.0f*/, float rotation3
 {
     static double const atan_pow = atan(pow(2.0f, -20.0f));
 
-    SetFloatValue(GAMEOBJECT_FACING, GetOrientation());
-
     double f_rot1 = sin(GetOrientation() / 2.0f);
     double f_rot2 = cos(GetOrientation() / 2.0f);
 
     int64 i_rot1 = int64(f_rot1 / atan_pow *(f_rot2 >= 0 ? 1.0f : -1.0f));
     int64 rotation = (i_rot1 << 43 >> 43) & 0x00000000001FFFFF;
-    SetUInt64Value(GAMEOBJECT_ROTATION, rotation);
+
+    //float f_rot2 = sin(0.0f / 2.0f);
+    //int64 i_rot2 = f_rot2 / atan(pow(2.0f, -20.0f));
+    //rotation |= (((i_rot2 << 22) >> 32) >> 11) & 0x000003FFFFE00000;
+
+    //float f_rot3 = sin(0.0f / 2.0f);
+    //int64 i_rot3 = f_rot3 / atan(pow(2.0f, -21.0f));
+    //rotation |= (i_rot3 >> 42) & 0x7FFFFC0000000000;
+
+    m_rotation = rotation;
 
     if(rotation2==0.0f && rotation3==0.0f)
     {

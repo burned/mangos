@@ -27,6 +27,7 @@
 #include "Spell.h"
 #include "ScriptCalls.h"
 #include "Totem.h"
+#include "SpellAuras.h"
 
 void WorldSession::HandleUseItemOpcode(WorldPacket& recvPacket)
 {
@@ -119,8 +120,29 @@ void WorldSession::HandleUseItemOpcode(WorldPacket& recvPacket)
     }
 
     SpellCastTargets targets;
-    if(!targets.read(&recvPacket, pUser))
+    if (!targets.read(&recvPacket, pUser))
         return;
+
+    targets.Update(pUser);
+
+    if (!pItem->IsTargetValidForItemUse(targets.getUnitTarget()))
+    {
+        // free gray item after use fail
+        pUser->SendEquipError(EQUIP_ERR_NONE, pItem, NULL);
+
+        // send spell error
+        if (SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellid))
+        {
+            // for implicit area/coord target spells 
+            if (IsPointEffectTarget(Targets(spellInfo->EffectImplicitTargetA[0])) ||
+                IsAreaEffectTarget(Targets(spellInfo->EffectImplicitTargetA[0])))
+                Spell::SendCastResult(_player,spellInfo,cast_count,SPELL_FAILED_NO_VALID_TARGETS);
+            // for explicit target spells 
+            else
+                Spell::SendCastResult(_player,spellInfo,cast_count,SPELL_FAILED_BAD_TARGETS);
+        }
+        return;
+    }
 
     //Note: If script stop casting it must send appropriate data to client to prevent stuck item in gray state.
     if(!Script->ItemUse(pUser,pItem,targets))
@@ -230,7 +252,7 @@ void WorldSession::HandleGameObjectUseOpcode( WorldPacket & recv_data )
     if(_player->m_mover != _player)
         return;
 
-    GameObject *obj = ObjectAccessor::GetGameObject(*_player, guid);
+    GameObject *obj = GetPlayer()->GetMap()->GetGameObject(guid);
 
     if(!obj)
         return;
@@ -254,7 +276,7 @@ void WorldSession::HandleGameobjectReportUse(WorldPacket& recvPacket)
     if(_player->m_mover != _player)
         return;
 
-    GameObject* go = ObjectAccessor::GetGameObject(*_player,guid);
+    GameObject* go = GetPlayer()->GetMap()->GetGameObject(guid);
     if(!go)
         return;
 
@@ -356,10 +378,6 @@ void WorldSession::HandleCancelAuraOpcode( WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket,4);
 
-    // ignore for remote control state
-    if(_player->m_mover != _player)
-        return;
-
     uint32 spellId;
     recvPacket >> spellId;
 
@@ -367,9 +385,33 @@ void WorldSession::HandleCancelAuraOpcode( WorldPacket& recvPacket)
     if (!spellInfo)
         return;
 
-    // not allow remove non positive spells and spells with attr SPELL_ATTR_CANT_CANCEL
-    if(!IsPositiveSpell(spellId) || (spellInfo->Attributes & SPELL_ATTR_CANT_CANCEL))
+    if (spellInfo->Attributes & SPELL_ATTR_CANT_CANCEL)
         return;
+
+    if(!IsPositiveSpell(spellId))
+    {
+        // ignore for remote control state
+        if (_player->m_mover != _player)
+        {
+            // except own aura spells
+            bool allow = false;
+            for(int k = 0; k < 3; ++k)
+            {
+                if (spellInfo->EffectApplyAuraName[k] == SPELL_AURA_MOD_POSSESS ||
+                    spellInfo->EffectApplyAuraName[k] == SPELL_AURA_MOD_POSSESS_PET)
+                {
+                    allow = true;
+                    break;
+                }
+            }
+
+            // this also include case when aura not found
+            if(!allow)
+                return;
+        }
+        else
+            return;
+    }
 
     // channeled spell case (it currently casted then)
     if (IsChanneledSpell(spellInfo))
@@ -453,7 +495,7 @@ void WorldSession::HandleCancelChanneling( WorldPacket & /*recv_data */)
     */
 }
 
-void WorldSession::HandleTotemDestroy( WorldPacket& recvPacket)
+void WorldSession::HandleTotemDestroyed( WorldPacket& recvPacket)
 {
     CHECK_PACKET_SIZE(recvPacket, 1);
 
@@ -471,7 +513,7 @@ void WorldSession::HandleTotemDestroy( WorldPacket& recvPacket)
     if(!_player->m_TotemSlot[slotId])
         return;
 
-    Creature* totem = ObjectAccessor::GetCreature(*_player,_player->m_TotemSlot[slotId]);
+    Creature* totem = GetPlayer()->GetMap()->GetCreature(_player->m_TotemSlot[slotId]);
     if(totem && totem->isTotem())
         ((Totem*)totem)->UnSummon();
 }
@@ -489,3 +531,31 @@ void WorldSession::HandleSelfResOpcode( WorldPacket & /*recv_data*/ )
         _player->SetUInt32Value(PLAYER_SELF_RES_SPELL, 0);
     }
 }
+
+void WorldSession::HandleSpellClick( WorldPacket & recv_data )
+{
+    CHECK_PACKET_SIZE(recv_data, 8);
+
+    uint64 guid;
+    recv_data >> guid;
+
+    if (_player->isInCombat())                              // client prevent click and set different icon at combat state
+        return;
+
+    Creature *unit = ObjectAccessor::GetCreatureOrPetOrVehicle(*_player, guid);
+    if (!unit || unit->isInCombat())                        // client prevent click and set different icon at combat state
+        return;
+
+    SpellClickInfoMapBounds clickPair = objmgr.GetSpellClickInfoMapBounds(unit->GetEntry());
+    for(SpellClickInfoMap::const_iterator itr = clickPair.first; itr != clickPair.second; ++itr)
+    {
+        if (itr->second.IsFitToRequirements(_player))
+        {
+            Unit *caster = (itr->second.castFlags & 0x1) ? (Unit*)_player : (Unit*)unit;
+            Unit *target = (itr->second.castFlags & 0x2) ? (Unit*)_player : (Unit*)unit;
+
+            caster->CastSpell(target, itr->second.spellId, true);
+        }
+    }
+}
+
