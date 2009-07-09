@@ -1701,16 +1701,6 @@ uint32 Map::GetAreaIdByAreaFlag(uint16 areaflag,uint32 map_id)
         return 0;
 }
 
-uint32 Map::GetAreaIdByAreaFlag(uint16 areaflag,uint32 map_id)
-{
-    AreaTableEntry const *entry = GetAreaEntryByAreaFlagAndMap(areaflag,map_id);
-
-    if (entry)
-        return entry->ID;
-    else
-        return 0;
-}
-
 uint32 Map::GetZoneIdByAreaFlag(uint16 areaflag,uint32 map_id)
 {
     AreaTableEntry const *entry = GetAreaEntryByAreaFlagAndMap(areaflag,map_id);
