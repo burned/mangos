@@ -23,15 +23,19 @@
 // For more high level function for sSpellStore data
 
 #include "SharedDefines.h"
+#include "SpellAuraDefines.h"
 #include "DBCStructure.h"
+#include "DBCStores.h"
 #include "Database/SQLStorage.h"
 #include "DBCStores.h"
 
 #include "Utilities/UnorderedMap.h"
+
 #include <map>
 
 class Player;
 class Spell;
+struct SpellModifier;
 
 extern SQLStorage sSpellThreatStore;
 
@@ -65,13 +69,15 @@ enum SpellFamilyNames
 };
 
 //Some SpellFamilyFlags
-#define SPELLFAMILYFLAG_ROGUE_VANISH            UI64LIT(0x000000800)
-#define SPELLFAMILYFLAG_ROGUE_STEALTH           UI64LIT(0x000400000)
-#define SPELLFAMILYFLAG_ROGUE_BACKSTAB          UI64LIT(0x000800004)
-#define SPELLFAMILYFLAG_ROGUE_SAP               UI64LIT(0x000000080)
-#define SPELLFAMILYFLAG_ROGUE_FEINT             UI64LIT(0x008000000)
-#define SPELLFAMILYFLAG_ROGUE_KIDNEYSHOT        UI64LIT(0x000200000)
-#define SPELLFAMILYFLAG_ROGUE__FINISHING_MOVE   UI64LIT(0x9003E0000)
+#define SPELLFAMILYFLAG_ROGUE_VANISH            UI64LIT(0x0000000000000800)
+#define SPELLFAMILYFLAG_ROGUE_STEALTH           UI64LIT(0x0000000000400000)
+#define SPELLFAMILYFLAG_ROGUE_BACKSTAB          UI64LIT(0x0000000000800004)
+#define SPELLFAMILYFLAG_ROGUE_SAP               UI64LIT(0x0000000000000080)
+#define SPELLFAMILYFLAG_ROGUE_FEINT             UI64LIT(0x0000000008000000)
+#define SPELLFAMILYFLAG_ROGUE_KIDNEYSHOT        UI64LIT(0x0000000000200000)
+#define SPELLFAMILYFLAG_ROGUE__FINISHING_MOVE   UI64LIT(0x00000009003E0000)
+
+#define SPELLFAMILYFLAG_PALADIN_SEALS           UI64LIT(0x000004000A000200)
 
 // Spell clasification
 enum SpellSpecific
@@ -114,13 +120,21 @@ inline bool IsSpellHaveEffect(SpellEntry const *spellInfo, SpellEffects effect)
     return false;
 }
 
+inline bool IsSpellHaveAura(SpellEntry const *spellInfo, AuraType aura)
+{
+    for(int i= 0; i < 3; ++i)
+        if(AuraType(spellInfo->EffectApplyAuraName[i])==aura)
+            return true;
+    return false;
+}
+
 bool IsNoStackAuraDueToAura(uint32 spellId_1, uint32 effIndex_1, uint32 spellId_2, uint32 effIndex_2);
 
 inline bool IsSealSpell(SpellEntry const *spellInfo)
 {
     //Collection of all the seal family flags. No other paladin spell has any of those.
     return spellInfo->SpellFamilyName == SPELLFAMILY_PALADIN &&
-        ( spellInfo->SpellFamilyFlags & UI64LIT(0x4000A000200));
+        ( spellInfo->SpellFamilyFlags & SPELLFAMILYFLAG_PALADIN_SEALS );
 }
 
 inline bool IsElementalShield(SpellEntry const *spellInfo)
@@ -713,6 +727,8 @@ class SpellMgr
     // Modifiers
     public:
         static SpellMgr& Instance();
+
+        void CheckUsedSpells(char const* table);
 
         // Loading data at server startup
         void LoadSpellChains();

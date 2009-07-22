@@ -187,7 +187,7 @@ pEffect SpellEffects[TOTAL_SPELL_EFFECTS]=
     &Spell::EffectApplyAreaAura,                            //129 SPELL_EFFECT_APPLY_AREA_AURA_ENEMY
     &Spell::EffectNULL,                                     //130 SPELL_EFFECT_REDIRECT_THREAT
     &Spell::EffectUnused,                                   //131 SPELL_EFFECT_131                      used in some test spells
-    &Spell::EffectNULL,                                     //132 SPELL_EFFECT_PLAY_MUSIC               sound id in misc value
+    &Spell::EffectPlayMusic,                                //132 SPELL_EFFECT_PLAY_MUSIC               sound id in misc value (SoundEntries.dbc)
     &Spell::EffectUnlearnSpecialization,                    //133 SPELL_EFFECT_UNLEARN_SPECIALIZATION   unlearn profession specialization
     &Spell::EffectKillCredit,                               //134 SPELL_EFFECT_KILL_CREDIT              misc value is creature entry
     &Spell::EffectNULL,                                     //135 SPELL_EFFECT_CALL_PET
@@ -375,8 +375,25 @@ void Spell::EffectSchoolDMG(uint32 effect_idx)
                 if ((m_spellInfo->SpellFamilyFlags & UI64LIT(0x00004000000000)) && m_spellInfo->SpellIconID==2128)
                 {
                     // Incinerate does more dmg (dmg*0.25) if the target is Immolated.
-                    if(unitTarget->HasAuraState(AURA_STATE_IMMOLATE))
+                    if(unitTarget->HasAuraState(AURA_STATE_CONFLAGRATE))
                         damage += int32(damage*0.25);
+                }
+                // Conflagrate - consumes Immolate
+                else if (m_spellInfo->TargetAuraState == AURA_STATE_CONFLAGRATE)
+                {
+                    // for caster applied auras only
+                    Unit::AuraList const &mPeriodic = unitTarget->GetAurasByType(SPELL_AURA_PERIODIC_DAMAGE);
+                    for(Unit::AuraList::const_iterator i = mPeriodic.begin(); i != mPeriodic.end(); ++i)
+                    {
+                        if ((*i)->GetSpellProto()->SpellFamilyName == SPELLFAMILY_WARLOCK &&
+                            (*i)->GetCasterGUID()==m_caster->GetGUID() &&
+                            // Immolate
+                            ((*i)->GetSpellProto()->SpellFamilyFlags & UI64LIT(0x0000000000000004)))
+                        {
+                            unitTarget->RemoveAurasByCasterSpell((*i)->GetId(), m_caster->GetGUID());
+                            break;
+                        }
+                    }
                 }
                 break;
             }
@@ -1868,7 +1885,7 @@ void Spell::EffectTriggerSpell(uint32 i)
             m_caster->CastSpell(unitTarget,spellInfo,true,m_CastItem,NULL,m_originalCasterGUID);
     }
     else
-        m_TriggerSpells.push_back(spellInfo);
+        AddTriggeredSpell(spellInfo);
 }
 
 void Spell::EffectTriggerMissileSpell(uint32 effect_idx)
@@ -2845,7 +2862,7 @@ void Spell::EffectOpenLock(uint32 effIndex)
                 return;
             }
         }
-        lockId = gameObjTarget->GetLockId();
+        lockId = goInfo->GetLockId();
         guid = gameObjTarget->GetGUID();
     }
     else if(itemTarget)
@@ -3115,7 +3132,7 @@ void Spell::EffectSummon(uint32 i)
 
     if(!spawnCreature->IsPositionValid())
     {
-        sLog.outError("ERROR: Pet (guidlow %d, entry %d) not summoned. Suggested coordinates isn't valid (X: %f Y: %f)",
+        sLog.outError("Pet (guidlow %d, entry %d) not summoned. Suggested coordinates isn't valid (X: %f Y: %f)",
             spawnCreature->GetGUIDLow(), spawnCreature->GetEntry(), spawnCreature->GetPositionX(), spawnCreature->GetPositionY());
         delete spawnCreature;
         return;
@@ -3548,7 +3565,7 @@ void Spell::EffectSummonGuardian(uint32 i)
 
         if(!spawnCreature->IsPositionValid())
         {
-            sLog.outError("ERROR: Pet (guidlow %d, entry %d) not created base at creature. Suggested coordinates isn't valid (X: %f Y: %f)",
+            sLog.outError("Pet (guidlow %d, entry %d) not created base at creature. Suggested coordinates isn't valid (X: %f Y: %f)",
                 spawnCreature->GetGUIDLow(), spawnCreature->GetEntry(), spawnCreature->GetPositionX(), spawnCreature->GetPositionY());
             delete spawnCreature;
             return;
@@ -3943,7 +3960,7 @@ void Spell::EffectSummonPet(uint32 i)
 
     if(!NewSummon->IsPositionValid())
     {
-        sLog.outError("ERROR: Pet (guidlow %d, entry %d) not summoned. Suggested coordinates isn't valid (X: %f Y: %f)",
+        sLog.outError("Pet (guidlow %d, entry %d) not summoned. Suggested coordinates isn't valid (X: %f Y: %f)",
             NewSummon->GetGUIDLow(), NewSummon->GetEntry(), NewSummon->GetPositionX(), NewSummon->GetPositionY());
         delete NewSummon;
         return;
@@ -4437,7 +4454,7 @@ void Spell::EffectSummonObjectWild(uint32 i)
         }
     }
 
-    if(uint32 linkedEntry = pGameObj->GetLinkedGameObjectEntry())
+    if(uint32 linkedEntry = pGameObj->GetGOInfo()->GetLinkedGameObjectEntry())
     {
         GameObject* linkedGO = new GameObject;
         if(linkedGO->Create(objmgr.GenerateLowGuid(HIGHGUID_GAMEOBJECT), linkedEntry, map,
@@ -5257,14 +5274,10 @@ void Spell::EffectSummonObject(uint32 i)
         default: return;
     }
 
-    uint64 guid = m_caster->m_ObjectSlot[slot];
-    if(guid != 0)
+    if(uint64 guid = m_caster->m_ObjectSlot[slot])
     {
-        GameObject* obj = NULL;
-        if( m_caster )
-            obj = m_caster->GetMap()->GetGameObject(guid);
-
-        if(obj) obj->Delete();
+        if(GameObject* obj = m_caster ? m_caster->GetMap()->GetGameObject(guid) : NULL)
+            obj->SetLootState(GO_JUST_DEACTIVATED);
         m_caster->m_ObjectSlot[slot] = 0;
     }
 
@@ -5598,7 +5611,7 @@ void Spell::EffectSummonCritter(uint32 i)
 
     if(!critter->IsPositionValid())
     {
-        sLog.outError("ERROR: Pet (guidlow %d, entry %d) not summoned. Suggested coordinates isn't valid (X: %f Y: %f)",
+        sLog.outError("Pet (guidlow %d, entry %d) not summoned. Suggested coordinates isn't valid (X: %f Y: %f)",
             critter->GetGUIDLow(), critter->GetEntry(), critter->GetPositionX(), critter->GetPositionY());
         delete critter;
         return;
@@ -5911,16 +5924,14 @@ void Spell::EffectTransmitted(uint32 effIndex)
         case GAMEOBJECT_TYPE_FISHINGHOLE:
         case GAMEOBJECT_TYPE_CHEST:
         default:
-        {
             break;
-        }
     }
 
     pGameObj->SetRespawnTime(duration > 0 ? duration/IN_MILISECONDS : 0);
 
-    pGameObj->SetOwnerGUID(m_caster->GetGUID() );
+    pGameObj->SetOwnerGUID(m_caster->GetGUID());
 
-    pGameObj->SetUInt32Value(GAMEOBJECT_LEVEL, m_caster->getLevel() );
+    pGameObj->SetUInt32Value(GAMEOBJECT_LEVEL, m_caster->getLevel());
     pGameObj->SetSpellId(m_spellInfo->Id);
 
     DEBUG_LOG("AddObject at SpellEfects.cpp EffectTransmitted");
@@ -5933,16 +5944,16 @@ void Spell::EffectTransmitted(uint32 effIndex)
     data << uint64(pGameObj->GetGUID());
     m_caster->SendMessageToSet(&data,true);
 
-    if(uint32 linkedEntry = pGameObj->GetLinkedGameObjectEntry())
+    if(uint32 linkedEntry = pGameObj->GetGOInfo()->GetLinkedGameObjectEntry())
     {
         GameObject* linkedGO = new GameObject;
         if(linkedGO->Create(objmgr.GenerateLowGuid(HIGHGUID_GAMEOBJECT), linkedEntry, cMap,
             fx, fy, fz, m_caster->GetOrientation(), 0.0f, 0.0f, 0.0f, 0.0f, 100, GO_STATE_READY))
         {
             linkedGO->SetRespawnTime(duration > 0 ? duration/IN_MILISECONDS : 0);
-            linkedGO->SetUInt32Value(GAMEOBJECT_LEVEL, m_caster->getLevel() );
+            linkedGO->SetUInt32Value(GAMEOBJECT_LEVEL, m_caster->getLevel());
             linkedGO->SetSpellId(m_spellInfo->Id);
-            linkedGO->SetOwnerGUID(m_caster->GetGUID() );
+            linkedGO->SetOwnerGUID(m_caster->GetGUID());
 
             linkedGO->GetMap()->Add(linkedGO);
         }
@@ -6122,4 +6133,22 @@ void Spell::EffectQuestFail(uint32 i)
         return;
 
     ((Player*)unitTarget)->FailQuest(m_spellInfo->EffectMiscValue[i]);
+}
+
+void Spell::EffectPlayMusic(uint32 i)
+{
+    if(!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
+        return;
+
+    uint32 soundid = m_spellInfo->EffectMiscValue[i];
+
+    if (!sSoundEntriesStore.LookupEntry(soundid))
+    {
+        sLog.outError("EffectPlayMusic: Sound (Id: %u) not exist in spell %u.",soundid,m_spellInfo->Id);
+        return;
+    }
+
+    WorldPacket data(SMSG_PLAY_MUSIC, 4);
+    data << uint32(soundid);
+    ((Player*)unitTarget)->GetSession()->SendPacket(&data);
 }
